@@ -205,14 +205,55 @@ def decision_path(record: Record) -> str:
 
 # --- Decisions --------------------------------------------------------------
 
-def decide(probs: dict[str, float]) -> tuple[str, float]:
-    """Expected-value argmax; returns (adjudication, P(correct))."""
+# An approval must clear the denial mass by this factor, not merely win on
+# expected value. Raw EV is optimal against a *known* distribution; ours is a
+# sample estimate, and its errors are not symmetric. Approving a denial costs
+# -4 and is both an explicit tie-breaker and a minimum-bar criterion in
+# EVALUATION.md, while the review hedge still pays 2. So approvals are held to
+# a margin and everything else follows the EV argmax.
+APPROVAL_MARGIN = 1.5
+
+
+def decide(probs: dict[str, float], *, allow_approval: bool = True) -> tuple[str, float]:
+    """Expected-value argmax, fail-closed on approvals.
+
+    Returns ``(adjudication, P(this decision is correct))`` - the quantity the
+    Brier calibration term scores, not the winning class probability.
+    """
+    approved = probs.get(APPROVED, 0.0)
+    denied = probs.get(DENIED, 0.0)
+    if not allow_approval or approved < APPROVAL_MARGIN * denied:
+        candidates = (DENIED, NEEDS_REVIEW)
+    else:
+        candidates = OUTCOMES
+
     best, best_ev = NEEDS_REVIEW, float("-inf")
-    for candidate in OUTCOMES:
+    for candidate in candidates:
         ev = sum(PAYOFF[candidate][truth] * probs.get(truth, 0.0) for truth in OUTCOMES)
         if ev > best_ev:
             best, best_ev = candidate, ev
     return best, probs.get(best, 0.0)
+
+
+# Paths that exist precisely because required evidence was missing or unread.
+# The field manual routes incomplete packets to review, and an approval here
+# would rest on absence rather than on evidence, so these can never approve
+# however the sample happens to fall.
+NO_APPROVAL_PATHS = frozenset({
+    "risk_page_absent",
+    "risk_page_unreadable",
+    "risk_page_unreadable_med",
+    "arrival_date_unknown",
+    "arrival_date_untrusted",
+    "visa_unknown",
+    "sponsor_unknown",
+    "fee_unknown",
+    "fee_stated_unknown",
+    "staleness_indeterminate",
+    "adjudicator_conflict",
+    "stamp_contested",
+    "unreadable_packet",
+})
 
 
 class Calibration:
@@ -229,7 +270,9 @@ class Calibration:
 
     def adjudicate(self, record: Record) -> tuple[str, float, str]:
         path = decision_path(record)
-        adjudication, confidence = decide(self.probs(path))
+        adjudication, confidence = decide(
+            self.probs(path), allow_approval=path not in NO_APPROVAL_PATHS
+        )
         return adjudication, confidence, path
 
 

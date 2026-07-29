@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mib.constants import PAYOFF  # noqa: E402
 from mib.policy import (  # noqa: E402
+    NO_APPROVAL_PATHS,
     OUTCOMES,
     apply_corpus_context,
     corpus_reference_date,
@@ -90,7 +91,9 @@ def evaluate(records, labels, table, fallback):
             continue
         scored += 1
         path = decision_path(record)
-        adjudication, confidence = decide(table.get(path, fallback))
+        adjudication, confidence = decide(
+            table.get(path, fallback), allow_approval=path not in NO_APPROVAL_PATHS
+        )
 
         row = {f: ("|".join(sorted(record.flag_set())) or "none")
                if f == "risk_flags" else str(getattr(record, f)) for f in FIELDS}
@@ -211,7 +214,9 @@ def main() -> int:
     for path, count in counts.most_common(24):
         probs = table.get(path)
         if probs:
-            choice, confidence = decide(probs)
+            choice, confidence = decide(
+                probs, allow_approval=path not in NO_APPROVAL_PATHS
+            )
             print(f"  {path:26s} n={count:4d} -> {choice:12s} conf={confidence:.2f}")
         else:
             print(f"  {path:26s} n={count:4d} -> (fallback, below support)")
