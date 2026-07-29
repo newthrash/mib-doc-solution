@@ -1,6 +1,22 @@
 __pycache__/
+**/__pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
 .venv/
 .DS_Store
+.env
 output/
 tmp/
+
+# Challenge data is distributed as a versioned zip and never committed.
+*.zip
+*.zip.sha256
+*.aria2
+data/train/
+data/validation/
+
+# Local scoring artifacts.
+predictions.jsonl
+evaluation.json
+case_scores.jsonl

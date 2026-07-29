@@ -22,16 +22,34 @@ from .lexicon import (
 from .pdfio import Packet
 from .record import Record
 
+# Packet forms lay out a field as the label on one line and the value on the
+# next. OCR of the same page more often yields `Label: value` on one line, so
+# both shapes are parsed. Labels are ordered most- to least-specific because
+# the first match wins ("Species Code" must beat a bare "Species").
 _LABELS = {
-    "applicant_name": ("APPLICANT NAME", "APPLICANT", "NAME"),
-    "species_code": ("SPECIES CODE", "SPECIES"),
-    "home_world": ("HOME WORLD", "HOMEWORLD", "WORLD"),
+    "applicant_name": ("APPLICANT NAME", "REGISTRY NAME", "APPLICANT"),
+    "species_code": ("SPECIES CODE", "SPECIES MATCH", "SPECIES"),
+    "home_world": ("HOME WORLD", "HOMEWORLD"),
     "visa_class": ("VISA CLASS", "VISA"),
     "sponsor_id": ("SPONSOR ID", "SPONSOR"),
     "arrival_date": ("ARRIVAL DATE", "ARRIVAL"),
     "declared_purpose": ("DECLARED PURPOSE", "PURPOSE"),
     "fee_status": ("FEE STATUS",),
     "risk_flags": ("OBSERVED FLAGS", "RISK FLAGS", "FLAGS"),
+}
+
+# Footer boilerplate and image placeholders are never field values.
+_NOISE_RE = re.compile(
+    r"^(?:Packet\s+MIB-\d+|Synthetic hiring|MIB-\d+\s*\|\s*MIB Eyes Only"
+    r"|(?:REGISTRY|PASSPORT|SCAN|BIOMETRIC)\s+IMAGE|N/?A|-+)\s*$",
+    re.IGNORECASE,
+)
+
+# A value line that is itself another field label means the real value was
+# blank or unreadable; adopting it would emit a label as a field value.
+_ALL_LABELS = {name for names in _LABELS.values() for name in names} | {
+    "CASE ID", "AMOUNT", "WAIVER CODE", "REGISTRY STATUS", "FINDING",
+    "BIOMETRIC CONFIDENCE", "PRIMARY INTAKE RECORD",
 }
 
 _FINDING_RE = re.compile(
@@ -43,19 +61,36 @@ _RECEIPT_RE = re.compile(
 )
 
 
+def _is_noise(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or _NOISE_RE.match(stripped):
+        return True
+    return stripped.upper().rstrip(":") in _ALL_LABELS
+
+
 def _labeled_values(lines: list[str], labels: tuple[str, ...]) -> list[str]:
-    values = []
-    for line in lines:
-        upper = line.upper()
+    """Collect values for `labels` in both packet layouts.
+
+    Layout A (native form text): the label occupies its own line and the value
+    is the next non-noise line. Layout B (OCR of the same page): the label and
+    value share a line, separated by a colon.
+    """
+    values: list[str] = []
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        upper = stripped.upper().rstrip(":")
         for label in labels:
-            position = upper.find(label)
-            if position < 0:
-                continue
-            remainder = line[position + len(label):]
-            remainder = remainder.lstrip(" :.|-\t")
-            if remainder.strip():
-                values.append(remainder.strip())
-            break
+            if upper == label:
+                for candidate in lines[index + 1: index + 3]:
+                    if not _is_noise(candidate):
+                        values.append(candidate.strip())
+                        break
+                break
+            if upper.startswith(label):
+                remainder = stripped[len(label):].lstrip(" :.|-\t")
+                if remainder and not _is_noise(remainder):
+                    values.append(remainder)
+                break
     return values
 
 
