@@ -20,3 +20,4 @@ data/validation/
 predictions.jsonl
 evaluation.json
 case_scores.jsonl
+cache/

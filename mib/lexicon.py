@@ -213,3 +213,21 @@ def parse_date(value: str) -> str | None:
         return dt.date(year, month, day).isoformat()
     except ValueError:
         return None
+
+
+def snap_flag(value: str) -> str | None:
+    """Match a possibly OCR-damaged token to a risk flag.
+
+    Flags are long underscore-joined words, so a generous threshold is safe:
+    the vocabulary is well separated and there is no `paid`/`unpaid` style
+    near-collision to guard against.
+    """
+    from .constants import RISK_FLAGS
+
+    token = re.sub(r"[^a-z_ ]", "", value.lower()).strip().replace(" ", "_")
+    if len(token) < 5:
+        return None
+    best_score, best_flag = min(
+        (weighted_distance(token, flag) / len(flag), flag) for flag in RISK_FLAGS
+    )
+    return best_flag if best_score <= 0.28 else None

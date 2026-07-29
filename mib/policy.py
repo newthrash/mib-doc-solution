@@ -112,10 +112,21 @@ def decision_path(record: Record) -> str:
     flags = record.flag_set()
     visa_known = record.visa_class != UNKNOWN
 
-    # Tier 0: a visible signed adjudicator finding is the highest-precedence
-    # evidence in the manual and wins outright.
-    if record.manual_finding in OUTCOMES:
-        return f"manual_{record.manual_finding.lower()}"
+    # Tier 0: the manual puts "visible MIB adjudicator stamp or signed manual
+    # note" at the top of the precedence list. Both are read here; when the two
+    # disagree the packet is contested and belongs in review rather than being
+    # resolved by preferring one channel over the other.
+    finding = record.manual_finding if record.manual_finding in OUTCOMES else None
+    stamp = record.stamp_verdict if record.stamp_verdict in OUTCOMES else None
+    if finding and stamp and finding != stamp:
+        return "adjudicator_conflict"
+    if finding:
+        return f"manual_{finding.lower()}"
+    if stamp:
+        return f"stamp_{stamp.lower()}"
+    if record.stamp_contested:
+        # Stamps present but all cancelled, or disagreeing with each other.
+        return "stamp_contested"
 
     # Tier 1: present disqualifying evidence.
     if record.visa_class == "TRANSIT-7":

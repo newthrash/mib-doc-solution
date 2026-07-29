@@ -36,6 +36,8 @@ class Record:
     has_hardship_waiver: bool = False     # visible hardship waiver text
     has_diplomatic_note: bool = False     # valid diplomatic note (stale exemption)
     manual_finding: str | None = None     # visible signed adjudicator finding
+    stamp_verdict: str | None = None      # uncancelled vector stamp, if any
+    stamp_contested: bool = False         # stamps disagree, or all struck
     manual_finding_score: float = 0.0     # how legible/certain that finding is
     has_approval_override: bool = False   # signed approval superseding a denial
     arrival_date_untrusted: bool = False  # date present only in hidden text

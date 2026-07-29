@@ -15,6 +15,7 @@ from .constants import RISK_FLAGS, UNKNOWN
 from .lexicon import (
     parse_date,
     snap_fee,
+    snap_flag,
     repair_sponsor_id,
     snap_home_world,
     snap_purpose,
@@ -157,14 +158,48 @@ def _consensus(values: list[str], parser) -> str | None:
     return None
 
 
-def _extract_flags(text: str) -> tuple[frozenset[str], bool]:
-    """Return (flags, evidence_seen). `none` counts as evidence."""
-    normalized = re.sub(r"[^a-z_|]+", " ", text.lower())
-    found = {flag for flag in RISK_FLAGS if flag in normalized}
-    explicit_none = bool(
-        re.search(r"(?:OBSERVED|RISK)\s+FLAGS?\s*[:\-]?\s*none", text, re.IGNORECASE)
-    )
-    return frozenset(found), bool(found) or explicit_none
+# The flag label is itself OCR-damaged on scanned slips ("Observed fiags",
+# "Ohserved flags"), so it is matched loosely and its value snapped to the
+# closed flag vocabulary.
+_FLAG_LABEL_RE = re.compile(
+    r"\b[o0][bh]?s[ea]rv[ea]d\s+f[il1]ags?\b|\brisk\s+f[il1]ags?\b", re.IGNORECASE
+)
+_NONE_RE = re.compile(r"^\W*(?:none|nene|nune|no[nm]e|n/?a)\W*$", re.IGNORECASE)
+
+
+def _extract_flags(lines: list[str], text: str) -> tuple[frozenset[str], bool]:
+    """Return (flags, evidence_seen).
+
+    An explicit `none` is evidence exactly as much as a named flag is: it is
+    the difference between a slip stating the applicant is clean and a slip we
+    could not read. Only the former may support an approval.
+    """
+    found: set[str] = set()
+    seen = False
+
+    for index, line in enumerate(lines):
+        match = _FLAG_LABEL_RE.search(line)
+        if not match:
+            continue
+        seen = True
+        tail = line[match.end():].lstrip(" :.|-\t")
+        candidates = [tail] if tail.strip() else []
+        candidates += [l for l in lines[index + 1: index + 3] if l.strip()]
+        for candidate in candidates:
+            if _NONE_RE.match(candidate.strip()):
+                return frozenset(), True
+            for token in re.split(r"[|,;]+", candidate):
+                flag = snap_flag(token)
+                if flag:
+                    found.add(flag)
+            if found:
+                break
+
+    # Flags named anywhere in trusted text still count: some packets record
+    # findings in prose rather than as a labeled slip field.
+    normalized = re.sub(r"[^a-z_]+", " ", text.lower())
+    found |= {flag for flag in RISK_FLAGS if flag in normalized}
+    return frozenset(found), seen or bool(found)
 
 
 def extract_record(packet: Packet) -> Record:
@@ -225,7 +260,7 @@ def extract_record(packet: Packet) -> Record:
         elif _WAIVER_CODE_RE.search(full_text):
             record.fee_status = "waived"
 
-    flags, flags_seen = _extract_flags(full_text)
+    flags, flags_seen = _extract_flags(all_lines, full_text)
     record.risk_flags = flags
     record.risk_flags_known = flags_seen
 
@@ -238,6 +273,8 @@ def extract_record(packet: Packet) -> Record:
     if match := _RECEIPT_RE.search(full_text):
         record.receipt_date = match.group(1)
 
+    record.stamp_verdict = packet.stamp_verdict
+    record.stamp_contested = packet.stamp_contested
     record.injection_detected = packet.injection_detected
     record.has_scanned_pages = packet.has_scanned_pages
     record.pages = len(packet.pages)

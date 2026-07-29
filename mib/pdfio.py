@@ -22,6 +22,8 @@ import numpy as np
 
 import pymupdf
 
+from .marks import read_marks
+
 # Instruction-shaped decoys are removed from all text views; their presence is
 # a document-quality signal, never evidence.
 UNTRUSTED_RE = re.compile(
@@ -58,6 +60,8 @@ class Packet:
     pdf_name: str
     pages: list[Page] = field(default_factory=list)
     error: str | None = None
+    stamp_verdict: str | None = None
+    stamp_contested: bool = False
 
     @property
     def injection_detected(self) -> bool:
@@ -278,12 +282,24 @@ def load_packet(pdf_path: str, dpi: int = 220) -> Packet:
     packet = Packet(case_id=path.stem, pdf_name=path.name)
     try:
         with pymupdf.open(path) as document:
+            # Stamps and cancellation strokes live in the vector layer, so they
+            # are read exactly rather than recovered from rendered ink.
+            evidence = read_marks(document)
+            live = evidence.live_verdict()
+            if live:
+                packet.stamp_verdict = live[0]
+            elif evidence.stamps:
+                packet.stamp_contested = True
+
             for index, page in enumerate(document):
                 visible, hidden = native_text_split(page)
                 visible, injected_visible = scrub(visible)
                 _, injected_hidden = scrub(hidden)
                 ocr_text, ocr_confidence = "", 0.0
-                is_scanned = len(visible.strip()) < 40
+                # Every page carries footer boilerplate in its text layer, so
+                # raw length cannot distinguish a digital form from a raster
+                # scan. Measure only the body.
+                is_scanned = len(_FOOTER_RE.sub("", visible).strip()) < 40
                 try:
                     ocr_text, ocr_confidence = ocr_page(page, dpi=dpi)
                     ocr_text, injected_ocr = scrub(ocr_text)
