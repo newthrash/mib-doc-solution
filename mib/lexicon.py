@@ -125,15 +125,55 @@ _DIGIT_REPAIRS = str.maketrans(
 
 
 def repair_sponsor_id(value: str) -> str | None:
-    """Normalize a sponsor mention to SPN-#### with constrained digit repair."""
+    """Normalize a sponsor mention to SPN-#### with constrained repair.
+
+    The prefix is a fixed literal, so OCR damage to it is unambiguous and safe
+    to repair (`SPR`, `SPM`, `SFN`, `5PN` all mean `SPN`). The four digits are
+    NOT safe to guess beyond known glyph confusions - a wrong sponsor id can
+    invent or erase a revocation - so anything still non-numeric is rejected.
+    """
     compact = re.sub(r"[^A-Za-z0-9]", "", value.upper())
-    match = re.search(r"S[PF]?N?([0-9OQDILZSBGT]{4})$", compact) or re.search(
-        r"SPN([0-9OQDILZSBGT]{4})", compact
-    )
+    match = re.search(r"[S5][PFR][NRM]([0-9OQDILZSBGT]{4})", compact)
     if not match:
-        return None
+        # Bare four digits directly after a SPONSOR label.
+        match = re.search(r"^([0-9OQDILZSBGT]{4})$", compact)
+        if not match:
+            return None
     digits = match.group(1).translate(_DIGIT_REPAIRS)
     return f"SPN-{digits}" if digits.isdigit() else None
+
+
+def snap_fee(value: str) -> str | None:
+    """Match a damaged fee word to its status, asymmetrically.
+
+    `paid` and `unpaid` differ only by a two-letter prefix, and confusing them
+    flips a denial into an approval. So the negative prefix is decisive: any
+    reading that begins with a plausible `un` resolves within {unpaid,
+    unknown} and can never become `paid`. Only a token positively lacking that
+    prefix is allowed to reach `paid`.
+    """
+    token = re.sub(r"[^a-z]", "", value.lower())
+    if not token or len(token) < 3:
+        return None
+
+    if re.match(r"^[uvn][nmr]", token) or token.startswith("un"):
+        rest = token[2:]
+        if not rest:
+            return None
+        for candidate in ("paid", "known"):
+            if weighted_distance(rest, candidate) / len(candidate) <= 0.5:
+                return "unpaid" if candidate == "paid" else "unknown"
+        return None
+
+    for candidate in ("paid", "waived", "unknown"):
+        if candidate == "unknown":
+            continue
+        # A short OCR fragment ("pac") is a prefix of the true word, so score
+        # the truncation rather than penalizing the missing tail.
+        window = candidate[: len(token)] if len(token) < len(candidate) else candidate
+        if weighted_distance(token, window) / max(1, len(window)) <= 0.34:
+            return candidate
+    return None
 
 
 _MONTHS = {

@@ -9,10 +9,12 @@ inspected; the interface (`Packet -> Record`) is the stable part.
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 from .constants import RISK_FLAGS, UNKNOWN
 from .lexicon import (
     parse_date,
+    snap_fee,
     repair_sponsor_id,
     snap_home_world,
     snap_purpose,
@@ -60,6 +62,34 @@ _RECEIPT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A signed manual correction supersedes the printed form field.
+_SPONSOR_CORRECTION_RE = re.compile(
+    r"(?:MANUAL\s+)?CORRECTION[^.\n]*?SPONSOR\s+(?:IS|=|:)?\s*([A-Z0-9-]{6,10})",
+    re.IGNORECASE,
+)
+# Sponsor letters state the id in prose rather than as a labeled field.
+_SPONSOR_PROSE_RE = re.compile(
+    r"\bSPONSOR\s+(S[PFR][NRM][-\s]?[0-9OQDILZSBGT]{4})\b", re.IGNORECASE
+)
+_WAIVER_CODE_RE = re.compile(
+    r"WAIVER\s+CODE\s*[:\-]?\s*(?!N/?A\b)([A-Z][A-Z0-9-]{2,})", re.IGNORECASE
+)
+
+
+def _parse_name(value: str) -> str | None:
+    name = re.split(r"\s{2,}|[|]", value)[0].strip()
+    parts = [p for p in name.split() if re.fullmatch(r"[A-Za-z'’-]+", p)]
+    if len(parts) < 2:
+        return None
+    return " ".join(parts[:2])
+
+
+def _parse_fee(value: str) -> str | None:
+    token = value.strip().split()[0] if value.strip() else ""
+    if token.lower().strip(".,;:") in ("paid", "waived", "unpaid", "unknown"):
+        return token.lower().strip(".,;:")
+    return snap_fee(token)
+
 
 def _is_noise(line: str) -> bool:
     stripped = line.strip()
@@ -94,8 +124,37 @@ def _labeled_values(lines: list[str], labels: tuple[str, ...]) -> list[str]:
     return values
 
 
-def _first(values: list[str]) -> str | None:
-    return values[0] if values else None
+def _first_parsed(values: list[str], parser) -> str | None:
+    """Return the first candidate that actually parses.
+
+    A label match does not imply a usable value: "Sponsor Attestation Letter"
+    matches the SPONSOR label and yields prose. Trying only the first candidate
+    strands the real value later in the packet, so every candidate is offered
+    to the field's parser and the first success wins.
+    """
+    for value in values:
+        parsed = parser(value)
+        if parsed:
+            return parsed
+    return None
+
+
+def _consensus(values: list[str], parser) -> str | None:
+    """Prefer the parsed value seen on the most pages, then the first seen.
+
+    Fields are repeated across intake form, registry extract, and biometric
+    slip. When OCR garbles one copy, agreement across pages recovers the
+    truth without trusting any single reading.
+    """
+    parsed = [p for p in (parser(v) for v in values) if p]
+    if not parsed:
+        return None
+    counts = Counter(parsed)
+    best = max(counts.values())
+    for value in parsed:  # stable: earliest value among the tied winners
+        if counts[value] == best:
+            return value
+    return None
 
 
 def _extract_flags(text: str) -> tuple[frozenset[str], bool]:
@@ -130,40 +189,41 @@ def extract_record(packet: Packet) -> Record:
         if record.manual_finding == "APPROVED" and len(findings) > 1:
             record.has_approval_override = True
 
-    raw: dict[str, str | None] = {
-        field: _first(_labeled_values(all_lines, labels))
+    raw: dict[str, list[str]] = {
+        field: _labeled_values(all_lines, labels)
         for field, labels in _LABELS.items()
     }
 
-    if raw["applicant_name"]:
-        name = re.split(r"\s{2,}|[|]", raw["applicant_name"])[0].strip()
-        parts = [p for p in name.split() if re.fullmatch(r"[A-Za-z'’-]+", p)]
-        if len(parts) >= 2:
-            record.applicant_name = " ".join(parts[:2])
-    if raw["species_code"]:
-        record.species_code = snap_species(raw["species_code"]) or UNKNOWN
-    if raw["home_world"]:
-        record.home_world = snap_home_world(raw["home_world"]) or UNKNOWN
-    if raw["visa_class"]:
-        record.visa_class = snap_visa(raw["visa_class"]) or UNKNOWN
-    if raw["sponsor_id"]:
-        record.sponsor_id = repair_sponsor_id(raw["sponsor_id"]) or UNKNOWN
-    elif match := re.search(r"SPN[-\s]?\d{4}", full_text):
-        record.sponsor_id = repair_sponsor_id(match.group(0)) or UNKNOWN
-    if raw["arrival_date"]:
-        record.arrival_date = parse_date(raw["arrival_date"]) or UNKNOWN
-    if raw["declared_purpose"]:
-        record.declared_purpose = snap_purpose(raw["declared_purpose"]) or UNKNOWN
+    record.applicant_name = _consensus(raw["applicant_name"], _parse_name) or UNKNOWN
+    record.species_code = _consensus(raw["species_code"], snap_species) or UNKNOWN
+    record.home_world = _consensus(raw["home_world"], snap_home_world) or UNKNOWN
+    record.visa_class = _consensus(raw["visa_class"], snap_visa) or UNKNOWN
+    record.arrival_date = _consensus(raw["arrival_date"], parse_date) or UNKNOWN
+    record.declared_purpose = _consensus(raw["declared_purpose"], snap_purpose) or UNKNOWN
 
-    if raw["fee_status"]:
-        fee = raw["fee_status"].split()[0].lower().strip(".,;")
-        if fee in ("paid", "waived", "unpaid", "unknown"):
-            record.fee_status = fee
-            record.fee_explicit_unknown = fee == "unknown"
-    if record.fee_status == UNKNOWN and not record.fee_explicit_unknown:
-        # Receipt geometry fallback: the standard fee amount implies payment.
-        if re.search(r"\$\s*809(?:[.,]00)?\b", full_text):
+    # Sponsor id, in precedence order: a signed manual correction outranks the
+    # form field, which outranks a sponsor letter's prose.
+    sponsor = None
+    if match := _SPONSOR_CORRECTION_RE.search(full_text):
+        sponsor = repair_sponsor_id(match.group(1))
+    if not sponsor:
+        sponsor = _consensus(raw["sponsor_id"], repair_sponsor_id)
+    if not sponsor:
+        prose = _SPONSOR_PROSE_RE.findall(full_text)
+        sponsor = _consensus(prose, repair_sponsor_id)
+    record.sponsor_id = sponsor or UNKNOWN
+
+    fee = _first_parsed(raw["fee_status"], _parse_fee)
+    if fee:
+        record.fee_status = fee
+        record.fee_explicit_unknown = fee == "unknown"
+    else:
+        # Receipt geometry: the standard fee amount implies payment, and a
+        # printed waiver code implies a waiver, when the status word is damaged.
+        if re.search(r"\$\s*809(?:[.,]0{2})?\b", full_text):
             record.fee_status = "paid"
+        elif _WAIVER_CODE_RE.search(full_text):
+            record.fee_status = "waived"
 
     flags, flags_seen = _extract_flags(full_text)
     record.risk_flags = flags

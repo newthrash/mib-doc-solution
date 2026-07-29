@@ -193,21 +193,63 @@ def render_gray(page: pymupdf.Page, dpi: int = 220) -> np.ndarray:
     return np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(pixmap.height, pixmap.width)
 
 
+_FOOTER_RE = re.compile(r"Packet\s+MIB-\d+.*|Synthetic hiring.*", re.IGNORECASE)
+
+# Field labels that indicate the page's substance was actually recovered.
+# Footer boilerplate OCRs cleanly even when the form body is unreadable, so
+# raw confidence alone cannot tell a good read from a page of noise.
+_ANCHORS = (
+    "FEE STATUS", "APPLICANT", "SPECIES", "SPONSOR", "ARRIVAL", "VISA",
+    "HOME WORLD", "OBSERVED", "REGISTRY", "BIOMETRIC", "FINDING", "AMOUNT",
+)
+
+
+def _anchor_count(text: str) -> int:
+    normalized = re.sub(r"[^A-Z ]+", " ", _FOOTER_RE.sub("", text).upper())
+    return sum(anchor in normalized for anchor in _ANCHORS)
+
+
+def _score(text: str, confidence: float) -> float:
+    body = _FOOTER_RE.sub("", text)
+    return confidence + 14.0 * _anchor_count(text) + min(18.0, len(body) / 30.0)
+
+
 def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float]:
-    """Primary OCR with bounded escalation for faded or rotated scans."""
+    """OCR with bounded escalation, ordered by what actually works here.
+
+    PSM 3 (full auto segmentation) reads these structured forms far better
+    than PSM 11 (sparse text): on a damaged fee receipt PSM 11 at 220 DPI
+    misses the status line entirely while PSM 3 at 300 DPI recovers it. Each
+    rung is gated on anchor recovery so clean pages pay a single pass.
+    """
     gray = render_gray(page, dpi=dpi)
-    text, confidence = _tesseract(gray, psm=11)
-    best = (text, confidence)
-    if confidence < 70.0 or len(re.sub(r"\W", "", text)) < 70:
-        retry_text, retry_confidence = _tesseract(_enhance(gray), psm=11)
-        if retry_confidence > best[1]:
-            best = (retry_text, retry_confidence)
-    if len(re.sub(r"\W", "", best[0])) < 100:
+    best = _tesseract(gray, psm=3)
+
+    if _anchor_count(best[0]) < 2:
+        candidate = _tesseract(gray, psm=11)
+        if _score(*candidate) > _score(*best):
+            best = candidate
+
+    # A page whose body is still unrecovered earns one high-resolution,
+    # contrast-stretched pass - the expensive rung, reserved for pages that
+    # would otherwise contribute nothing.
+    if _anchor_count(best[0]) < 2:
+        dense = render_gray(page, dpi=300)
+        for variant in (dense, _enhance(dense)):
+            candidate = _tesseract(variant, psm=3)
+            if _score(*candidate) > _score(*best):
+                best = candidate
+            if _anchor_count(best[0]) >= 2:
+                break
+
+    # Rotated scans: PDF metadata says upright but the raster is turned.
+    if _anchor_count(best[0]) < 1 and len(re.sub(r"\W", "", best[0])) < 100:
         for turns in (1, 3, 2):
-            rotated = np.ascontiguousarray(np.rot90(gray, turns))
-            retry_text, retry_confidence = _tesseract(rotated, psm=6)
-            if retry_confidence > best[1] and len(retry_text) > len(best[0]):
-                best = (retry_text, retry_confidence)
+            candidate = _tesseract(np.ascontiguousarray(np.rot90(gray, turns)), psm=3)
+            if _score(*candidate) > _score(*best):
+                best = candidate
+            if _anchor_count(best[0]) >= 2:
+                break
     return best
 
 

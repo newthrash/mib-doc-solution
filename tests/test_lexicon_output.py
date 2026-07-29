@@ -78,5 +78,26 @@ class OutputClampTests(unittest.TestCase):
         self.assertEqual(row["confidence"], 0.91)
 
 
+class FeeSnapSafety(unittest.TestCase):
+    """A damaged `unpaid` must never resolve to `paid` - that flips a denial."""
+
+    def test_negative_prefix_is_decisive(self):
+        from mib.lexicon import snap_fee
+        for token in ("unpaid", "unpai", "unpad", "vnpaid", "unpaic"):
+            self.assertEqual(snap_fee(token), "unpaid", token)
+
+    def test_truncated_positive_resolves(self):
+        from mib.lexicon import snap_fee
+        self.assertEqual(snap_fee("pac"), "paid")
+        self.assertEqual(snap_fee("pald"), "paid")
+        self.assertEqual(snap_fee("waivec"), "waived")
+
+    def test_unknown_and_garbage(self):
+        from mib.lexicon import snap_fee
+        self.assertEqual(snap_fee("unknovn"), "unknown")
+        self.assertIsNone(snap_fee("xyz"))
+        self.assertIsNone(snap_fee(""))
+
+
 if __name__ == "__main__":
     unittest.main()
