@@ -16,6 +16,7 @@ from .lexicon import (
     parse_date,
     snap_fee,
     snap_name,
+    snap_name_token,
     snap_flag,
     repair_sponsor_id,
     snap_home_world,
@@ -85,12 +86,24 @@ _WAIVER_CODE_RE = re.compile(
 
 
 def _parse_name(value: str) -> str | None:
-    """Parse a two-token name and repair OCR damage against the vocabulary."""
+    """Parse a two-token name and repair OCR damage against the vocabulary.
+
+    A candidate that resolves to another field's vocabulary is field bleed -
+    the label's own value was blank and the scan ran into a neighbouring cell.
+    'Home Europa' is a home world, never an applicant.
+    """
+    if snap_home_world(value) or snap_species(value) or snap_purpose(value):
+        return None
     name = re.split(r"\s{2,}|[|]", value)[0].strip()
     parts = [p for p in name.split() if re.fullmatch(r"[A-Za-z'’-]+", p)]
     if len(parts) < 2:
         return None
     candidate = " ".join(parts[:2])
+    # Applicant names are drawn from a known token set. Requiring at least one
+    # token to belong to it rejects merged-column debris like "Home Europa",
+    # which no amount of trimming would otherwise distinguish from a name.
+    if not any(snap_name_token(part) for part in parts[:2]):
+        return None
     # A closed vocabulary turns 'Mirequell Qcrul' back into a real applicant;
     # tokens it cannot place are kept verbatim rather than discarded.
     return snap_name(candidate) or candidate
@@ -119,7 +132,9 @@ def _labeled_values(lines: list[str], labels: tuple[str, ...]) -> list[str]:
     """
     values: list[str] = []
     for index, line in enumerate(lines):
-        stripped = line.strip()
+        # OCR frequently prefixes a line with a stray mark ("'Applicant:"),
+        # which silently defeats a prefix match and strands the real value.
+        stripped = re.sub(r"^[^A-Za-z0-9]+", "", line.strip())
         upper = stripped.upper().rstrip(":")
         for label in labels:
             if upper == label:
@@ -151,22 +166,41 @@ def _first_parsed(values: list[str], parser) -> str | None:
     return None
 
 
-def _consensus(values: list[str], parser) -> str | None:
-    """Prefer the parsed value seen on the most pages, then the first seen.
+# Document precedence from FIELD_MANUAL.md, "Trusted Evidence". Pages whose
+# type could not be identified rank below every recognised document: an
+# unclassified page is often a damaged or decoy fragment, and letting it
+# outrank a biometric slip is how a correct value gets overwritten.
+_PAGE_RANK = {
+    "manual": 6,
+    "intake": 5,
+    "biometric": 4,
+    "fee": 4,
+    "sponsor": 3,
+    "registry": 2,
+    "unknown": 0,
+}
 
-    Fields are repeated across intake form, registry extract, and biometric
-    slip. When OCR garbles one copy, agreement across pages recovers the
-    truth without trusting any single reading.
+
+def _consensus(candidates: list[tuple[str, str]], parser) -> str | None:
+    """Resolve a field from candidates carrying their source page type.
+
+    Ranked by document precedence first, then by how many pages agree. Ties
+    previously broke on position, which let an unclassified page beat a
+    biometric slip purely by appearing earlier in the packet.
     """
-    parsed = [p for p in (parser(v) for v in values) if p]
+    parsed: list[tuple[int, str]] = []
+    for value, kind in candidates:
+        result = parser(value)
+        if result:
+            parsed.append((_PAGE_RANK.get(kind, 0), result))
     if not parsed:
         return None
-    counts = Counter(parsed)
-    best = max(counts.values())
-    for value in parsed:  # stable: earliest value among the tied winners
-        if counts[value] == best:
-            return value
-    return None
+
+    agreement = Counter(value for _, value in parsed)
+    authority: dict[str, int] = {}
+    for rank, value in parsed:
+        authority[value] = max(authority.get(value, 0), rank)
+    return max(parsed, key=lambda item: (authority[item[1]], agreement[item[1]]))[1]
 
 
 # The flag label is itself OCR-damaged on scanned slips ("Observed fiags",
@@ -245,10 +279,16 @@ def extract_record(packet: Packet) -> Record:
         if record.manual_finding == "APPROVED" and len(findings) > 1:
             record.has_approval_override = True
 
-    raw: dict[str, list[str]] = {
-        field: _labeled_values(all_lines, labels)
-        for field, labels in _LABELS.items()
-    }
+    # Candidates keep the page type they came from so precedence can be
+    # applied; a bare list of strings cannot express that a value came from a
+    # decoy fragment rather than the intake form.
+    raw: dict[str, list[tuple[str, str]]] = {field: [] for field in _LABELS}
+    for page in packet.pages:
+        page_lines = page.text.splitlines()
+        for field, labels in _LABELS.items():
+            raw[field].extend(
+                (value, page.kind) for value in _labeled_values(page_lines, labels)
+            )
 
     record.applicant_name = _consensus(raw["applicant_name"], _parse_name) or UNKNOWN
     record.species_code = _consensus(raw["species_code"], snap_species) or UNKNOWN
@@ -265,11 +305,11 @@ def extract_record(packet: Packet) -> Record:
     if not sponsor:
         sponsor = _consensus(raw["sponsor_id"], repair_sponsor_id)
     if not sponsor:
-        prose = _SPONSOR_PROSE_RE.findall(full_text)
+        prose = [(m, "sponsor") for m in _SPONSOR_PROSE_RE.findall(full_text)]
         sponsor = _consensus(prose, repair_sponsor_id)
     record.sponsor_id = sponsor or UNKNOWN
 
-    fee = _first_parsed(raw["fee_status"], _parse_fee)
+    fee = _first_parsed([v for v, _ in raw["fee_status"]], _parse_fee)
     if fee:
         record.fee_status = fee
         record.fee_explicit_unknown = fee == "unknown"
