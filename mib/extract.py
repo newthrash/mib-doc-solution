@@ -15,6 +15,7 @@ from .constants import RISK_FLAGS, UNKNOWN
 from .lexicon import (
     parse_date,
     snap_fee,
+    snap_name,
     snap_flag,
     repair_sponsor_id,
     snap_home_world,
@@ -84,11 +85,15 @@ _WAIVER_CODE_RE = re.compile(
 
 
 def _parse_name(value: str) -> str | None:
+    """Parse a two-token name and repair OCR damage against the vocabulary."""
     name = re.split(r"\s{2,}|[|]", value)[0].strip()
     parts = [p for p in name.split() if re.fullmatch(r"[A-Za-z'’-]+", p)]
     if len(parts) < 2:
         return None
-    return " ".join(parts[:2])
+    candidate = " ".join(parts[:2])
+    # A closed vocabulary turns 'Mirequell Qcrul' back into a real applicant;
+    # tokens it cannot place are kept verbatim rather than discarded.
+    return snap_name(candidate) or candidate
 
 
 def _parse_fee(value: str) -> str | None:

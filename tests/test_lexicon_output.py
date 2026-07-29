@@ -134,6 +134,25 @@ class FlagSnapping(unittest.TestCase):
         self.assertIsNone(snap_flag("abc"))
 
 
+class NameSnapping(unittest.TestCase):
+    """Applicant names are a closed vocabulary, so damage is repairable."""
+
+    def test_repairs_ocr_damage_to_truth(self):
+        from mib.lexicon import snap_name
+        self.assertEqual(snap_name("Mirequell Qcrul"), "Miraquell Qorul")
+        self.assertEqual(snap_name("Zavoss lxomora"), "Zavoss Ixomora")
+        self.assertEqual(snap_name("Arinax Qommora"), "Arinax Qormora")
+
+    def test_field_bleed_is_not_snapped_into_a_name(self):
+        """A home_world read into the name slot must not become an applicant."""
+        from mib.lexicon import snap_name
+        self.assertEqual(snap_name("Home Europa"), "Home Europa")
+
+    def test_single_token_rejected(self):
+        from mib.lexicon import snap_name
+        self.assertIsNone(snap_name("Solo"))
+
+
 class OutputPriorSafety(unittest.TestCase):
     """Priors improve the serialized row and never touch a decision."""
 

@@ -268,3 +268,80 @@ def snap_flag(value: str) -> str | None:
         (weighted_distance(token, flag) / len(flag), flag) for flag in RISK_FLAGS
     )
     return best_flag if best_score <= 0.28 else None
+
+
+# --- Applicant names -------------------------------------------------------
+
+_NAMES_PATH = None
+_NAME_VOCAB: tuple = ()
+
+
+def load_names(path=None) -> tuple:
+    """Load the applicant-name vocabulary: observed tokens plus grammar.
+
+    Names are drawn from a small token set shared between first and last
+    position, so a damaged reading can be snapped rather than emitted wrong.
+    Generated stem+suffix combinations are included alongside the observed
+    tokens so a private set that pairs known parts in new ways is still
+    covered.
+    """
+    global _NAME_VOCAB, _NAMES_PATH
+    from pathlib import Path as _Path
+
+    if path is None:
+        path = _Path(__file__).resolve().parent.parent / "policy" / "names.json"
+    if _NAME_VOCAB and _NAMES_PATH == str(path):
+        return _NAME_VOCAB
+    try:
+        import json
+
+        with open(path) as handle:
+            payload = json.load(handle)
+        # Observed tokens are kept separate from generated ones and matched
+        # first. Mixing them lets a spurious stem+suffix combination sit beside
+        # a real name and block the margin test, so a damaged reading of a
+        # token we have actually seen would fail to resolve.
+        _NAME_VOCAB = (
+            tuple(sorted(payload.get("observed_tokens", ()))),
+            tuple(sorted(set(payload.get("generated", ())) - set(payload.get("observed_tokens", ())))),
+        )
+        _NAMES_PATH = str(path)
+    except (OSError, ValueError):
+        _NAME_VOCAB = ((), ())
+    return _NAME_VOCAB
+
+
+def snap_name_token(value: str) -> str | None:
+    """Snap one name token to the vocabulary, refusing ambiguous matches."""
+    observed, generated = load_names()
+    if not observed:
+        return None
+    cleaned = re.sub(r"[^A-Za-z]", "", value)
+    if len(cleaned) < 3:
+        return None
+    for vocab in (observed, generated):
+        if not vocab:
+            continue
+        scored = sorted(
+            (weighted_distance(cleaned.lower(), entry.lower()) / max(1, len(entry)), entry)
+            for entry in vocab
+        )
+        best, entry = scored[0]
+        if best > 0.30:
+            continue
+        if len(scored) > 1 and scored[1][0] - best < 0.08:
+            continue
+        return entry
+    return None
+
+
+def snap_name(value: str) -> str | None:
+    """Repair a two-token applicant name, preserving its original casing."""
+    parts = [p for p in value.split() if re.fullmatch(r"[A-Za-z'’-]+", p)]
+    if len(parts) < 2:
+        return None
+    repaired = []
+    for part in parts[:2]:
+        snapped = snap_name_token(part)
+        repaired.append(snapped if snapped else part)
+    return " ".join(repaired)
