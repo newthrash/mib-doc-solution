@@ -103,14 +103,51 @@ def snap_home_world(value: str) -> str | None:
     return snap(value, HOME_WORLDS)
 
 
+# The suffix digit is nearly a primary key: 2, 3 and 7 each belong to exactly
+# one visa class, so a damaged prefix costs nothing there. Only digit 1 is
+# shared (XW-1 and DIP-1) and needs the letters to disambiguate.
+_DIGIT_UNIQUE = {"2": "XW-2", "3": "MED-3", "7": "TRANSIT-7"}
+_DIGIT_ONE = ("XW-1", "DIP-1")
+
+
 def snap_visa(value: str) -> str | None:
-    # Visa classes are short and near-collinear (XW-1/XW-2); require the
-    # discriminating digit to survive rather than letting distance guess it.
+    """Resolve a visa class, trusting the digit over the letters.
+
+    OCR damages prefixes readily ('WED-3' for 'MED-3') while the digit, being
+    a single well-separated glyph, survives. Exploiting that is safe precisely
+    because the digit is the discriminating field: the classes it cannot
+    separate - XW-1 from DIP-1 - still require their letters, and a packet
+    whose letters are unreadable stays unmatched rather than guessed, since a
+    wrong DIP-1 would grant a sponsor exemption that was never earned.
+    """
     cleaned = _canon(value)
-    match = re.search(r"\b(XW|DIP|MED|TRANSIT)\s*[-. ]?\s*([1237])\b", cleaned)
-    if match:
-        candidate = f"{match.group(1)}-{match.group(2)}"
-        return candidate if candidate in VISA_CLASSES else None
+    exact = re.search(r"\b(XW|DIP|MED|TRANSIT)\s*[-. ]?\s*([1237])\b", cleaned)
+    if exact:
+        candidate = f"{exact.group(1)}-{exact.group(2)}"
+        if candidate in VISA_CLASSES:
+            return candidate
+
+    loose = re.search(r"([A-Z]{2,8})\s*[-. ]?\s*([1237])\b", cleaned)
+    if loose:
+        prefix, digit = loose.group(1), loose.group(2)
+        if digit in _DIGIT_UNIQUE:
+            # Guard against a prefix that clearly belongs to another class,
+            # which would mean the digit itself was misread.
+            best = min(
+                (weighted_distance(prefix, entry.split("-")[0]) / len(entry.split("-")[0]), entry)
+                for entry in VISA_CLASSES
+            )
+            if best[1] == _DIGIT_UNIQUE[digit] or best[0] > 0.5:
+                return _DIGIT_UNIQUE[digit]
+            return None
+        scored = sorted(
+            (weighted_distance(prefix, entry.split("-")[0]) / len(entry.split("-")[0]), entry)
+            for entry in _DIGIT_ONE
+        )
+        if scored[0][0] <= 0.34 and scored[1][0] - scored[0][0] >= 0.25:
+            return scored[0][1]
+        return None
+
     return snap(value, VISA_CLASSES, max_relative=0.25, min_margin=0.25)
 
 

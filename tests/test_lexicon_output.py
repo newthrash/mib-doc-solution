@@ -99,6 +99,41 @@ class FeeSnapSafety(unittest.TestCase):
         self.assertIsNone(snap_fee(""))
 
 
+class VisaSnapping(unittest.TestCase):
+    """The suffix digit is trusted over the letters, except where it cannot be."""
+
+    def test_damaged_prefix_resolves_via_unique_digit(self):
+        from mib.lexicon import snap_visa
+        for token in ("WED-3", "MEO-3", "MED-3"):
+            self.assertEqual(snap_visa(token), "MED-3", token)
+        self.assertEqual(snap_visa("XVV-2"), "XW-2")
+        self.assertEqual(snap_visa("TRANS1T 7"), "TRANSIT-7")
+
+    def test_shared_digit_still_requires_letters(self):
+        """Digit 1 is XW-1 or DIP-1; a wrong DIP-1 grants a sponsor exemption."""
+        from mib.lexicon import snap_visa
+        self.assertEqual(snap_visa("D1P-1"), "DIP-1")
+        self.assertEqual(snap_visa("XW-1"), "XW-1")
+        self.assertIsNone(snap_visa("ZZ-1"))
+
+    def test_garbage_rejected(self):
+        from mib.lexicon import snap_visa
+        self.assertIsNone(snap_visa("garbage"))
+        self.assertIsNone(snap_visa(""))
+
+
+class FlagSnapping(unittest.TestCase):
+    def test_damaged_flag_token_recovers(self):
+        from mib.lexicon import snap_flag
+        self.assertEqual(snap_flag("llegible_biometrics"), "illegible_biometrics")
+        self.assertEqual(snap_flag("biohazard_rcd"), "biohazard_red")
+
+    def test_unrelated_token_rejected(self):
+        from mib.lexicon import snap_flag
+        self.assertIsNone(snap_flag("reactor_maintenance"))
+        self.assertIsNone(snap_flag("abc"))
+
+
 class OutputPriorSafety(unittest.TestCase):
     """Priors improve the serialized row and never touch a decision."""
 

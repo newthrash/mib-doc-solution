@@ -205,6 +205,16 @@ def _extract_flags(lines: list[str], text: str) -> tuple[frozenset[str], bool]:
     # findings in prose rather than as a labeled slip field.
     normalized = re.sub(r"[^a-z_]+", " ", text.lower())
     found |= {flag for flag in RISK_FLAGS if flag in normalized}
+
+    # A literal scan misses OCR-damaged names ('illegible_biometrics' read as
+    # 'llegible_biometrics'). Underscore-joined tokens are distinctive enough
+    # here that snapping them is safe - ordinary form prose contains none -
+    # and recovering a flag only ever makes the decision more conservative.
+    for token in re.findall(r"[a-z]{3,}_[a-z_]{3,}", normalized):
+        flag = snap_flag(token)
+        if flag:
+            found.add(flag)
+
     return frozenset(found), seen or bool(found)
 
 
