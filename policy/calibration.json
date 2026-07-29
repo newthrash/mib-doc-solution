@@ -1,0 +1,150 @@
+{
+  "corpus_reference_date": "2026-06-25",
+  "corpus_revoked_outliers": [
+    "SPN-0007",
+    "SPN-0139",
+    "SPN-2718",
+    "SPN-4040",
+    "SPN-7331",
+    "SPN-9090"
+  ],
+  "fallback": {
+    "APPROVED": 0.2,
+    "DENIED": 0.2,
+    "NEEDS_REVIEW": 0.6
+  },
+  "fitted_from": "train_labels.csv",
+  "laplace": 1.0,
+  "paths": {
+    "arrival_date_unknown": {
+      "APPROVED": 0.1,
+      "DENIED": 0.15,
+      "NEEDS_REVIEW": 0.75
+    },
+    "arrival_date_untrusted": {
+      "APPROVED": 0.1,
+      "DENIED": 0.15,
+      "NEEDS_REVIEW": 0.75
+    },
+    "clean": {
+      "APPROVED": 0.9230769230769231,
+      "DENIED": 0.0038461538461538464,
+      "NEEDS_REVIEW": 0.07307692307692308
+    },
+    "clean_injection_seen": {
+      "APPROVED": 0.85,
+      "DENIED": 0.03,
+      "NEEDS_REVIEW": 0.12
+    },
+    "disqualifying_flag": {
+      "APPROVED": 0.005291005291005291,
+      "DENIED": 0.9894179894179894,
+      "NEEDS_REVIEW": 0.005291005291005291
+    },
+    "embargoed_home_world": {
+      "APPROVED": 0.024390243902439025,
+      "DENIED": 0.9512195121951219,
+      "NEEDS_REVIEW": 0.024390243902439025
+    },
+    "fee_stated_unknown": {
+      "APPROVED": 0.02631578947368421,
+      "DENIED": 0.02631578947368421,
+      "NEEDS_REVIEW": 0.9473684210526315
+    },
+    "fee_unknown": {
+      "APPROVED": 0.15,
+      "DENIED": 0.2,
+      "NEEDS_REVIEW": 0.65
+    },
+    "fee_unpaid": {
+      "APPROVED": 0.018867924528301886,
+      "DENIED": 0.9622641509433962,
+      "NEEDS_REVIEW": 0.018867924528301886
+    },
+    "fee_waived_unjustified": {
+      "APPROVED": 0.6785714285714286,
+      "DENIED": 0.14285714285714285,
+      "NEEDS_REVIEW": 0.17857142857142858
+    },
+    "manual_approved": {
+      "APPROVED": 0.92,
+      "DENIED": 0.03,
+      "NEEDS_REVIEW": 0.05
+    },
+    "manual_denied": {
+      "APPROVED": 0.02,
+      "DENIED": 0.93,
+      "NEEDS_REVIEW": 0.05
+    },
+    "manual_needs_review": {
+      "APPROVED": 0.05,
+      "DENIED": 0.05,
+      "NEEDS_REVIEW": 0.9
+    },
+    "review_flags": {
+      "APPROVED": 0.004901960784313725,
+      "DENIED": 0.0392156862745098,
+      "NEEDS_REVIEW": 0.9558823529411765
+    },
+    "review_flags_multi": {
+      "APPROVED": 0.037037037037037035,
+      "DENIED": 0.037037037037037035,
+      "NEEDS_REVIEW": 0.9259259259259259
+    },
+    "risk_page_absent": {
+      "APPROVED": 0.5,
+      "DENIED": 0.1,
+      "NEEDS_REVIEW": 0.4
+    },
+    "risk_page_unreadable": {
+      "APPROVED": 0.25,
+      "DENIED": 0.2,
+      "NEEDS_REVIEW": 0.55
+    },
+    "risk_page_unreadable_med": {
+      "APPROVED": 0.1,
+      "DENIED": 0.55,
+      "NEEDS_REVIEW": 0.35
+    },
+    "sponsor_revoked": {
+      "APPROVED": 0.013333333333333334,
+      "DENIED": 0.9733333333333334,
+      "NEEDS_REVIEW": 0.013333333333333334
+    },
+    "sponsor_revoked_override": {
+      "APPROVED": 0.7,
+      "DENIED": 0.15,
+      "NEEDS_REVIEW": 0.15
+    },
+    "sponsor_unknown": {
+      "APPROVED": 0.15,
+      "DENIED": 0.25,
+      "NEEDS_REVIEW": 0.6
+    },
+    "stale_arrival": {
+      "APPROVED": 0.4117647058823529,
+      "DENIED": 0.5588235294117647,
+      "NEEDS_REVIEW": 0.029411764705882353
+    },
+    "stale_dip_exempt": {
+      "APPROVED": 0.75,
+      "DENIED": 0.1,
+      "NEEDS_REVIEW": 0.15
+    },
+    "staleness_indeterminate": {
+      "APPROVED": 0.2,
+      "DENIED": 0.2,
+      "NEEDS_REVIEW": 0.6
+    },
+    "transit_7": {
+      "APPROVED": 0.017857142857142856,
+      "DENIED": 0.9642857142857143,
+      "NEEDS_REVIEW": 0.017857142857142856
+    },
+    "visa_unknown": {
+      "APPROVED": 0.15,
+      "DENIED": 0.25,
+      "NEEDS_REVIEW": 0.6
+    }
+  }
+}

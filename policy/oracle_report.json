@@ -1,0 +1,16 @@
+{
+  "accuracy": 0.946,
+  "calibration_score": 18.28767423508009,
+  "catastrophic_false_approvals": 7.0,
+  "classification_score": 75.81,
+  "confusion": {
+    "APPROVED->APPROVED": 276,
+    "APPROVED->DENIED": 13,
+    "DENIED->APPROVED": 7,
+    "DENIED->DENIED": 417,
+    "DENIED->NEEDS_REVIEW": 7,
+    "NEEDS_REVIEW->APPROVED": 27,
+    "NEEDS_REVIEW->NEEDS_REVIEW": 253
+  },
+  "mean_brier": 0.04280814412299776
+}

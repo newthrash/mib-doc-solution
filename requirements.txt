@@ -1,0 +1,4 @@
+# Pinned for reproducibility; everything runs offline at runtime.
+pymupdf==1.26.3
+numpy==2.2.6
+opencv-python-headless==4.11.0.86
