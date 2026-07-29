@@ -17,7 +17,7 @@
   "fitted_on": "extracted_records",
   "folds": 5,
   "min_path_support": 8,
-  "oof_total_estimate": 113.39881871565312,
+  "oof_total_estimate": 115.13992982676425,
   "paths": {
     "adjudicator_conflict": {
       "APPROVED": 0.16666666666666666,

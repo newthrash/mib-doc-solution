@@ -40,6 +40,7 @@ from mib.policy import (  # noqa: E402
     decision_path,
     emitted_guardrail,
 )
+from mib.output import apply_priors, load_priors  # noqa: E402
 from tools.build_cache import load_cache  # noqa: E402
 
 FIELDS = ("applicant_name", "species_code", "home_world", "visa_class",
@@ -77,7 +78,8 @@ def fit_table(paths_and_truth) -> tuple[dict, dict]:
     return table, fallback
 
 
-def evaluate(records, labels, table, fallback):
+def evaluate(records, labels, table, fallback, priors=None):
+    priors = priors or {}
     hits = Counter()
     classification_raw = 0.0
     correct = catastrophic = 0
@@ -102,8 +104,9 @@ def evaluate(records, labels, table, fallback):
         if demotion:
             adjudication, confidence = demotion
 
+        emitted = apply_priors(row, priors)
         for field in FIELDS:
-            if row[field].lower() == (truth[field].strip().lower() or "none"):
+            if emitted[field].lower() == (truth[field].strip().lower() or "none"):
                 hits[field] += 1
 
         gold = truth["adjudication"].strip()
@@ -144,6 +147,7 @@ def main() -> int:
     with open(args.labels, newline="") as f:
         labels = {row["case_id"]: row for row in csv.DictReader(f)}
 
+    priors = load_priors()
     records = [r for r in load_cache(args.cache) if r.case_id in labels]
     reference = corpus_reference_date(
         [r.arrival_date for r in records if r.arrival() is not None]
@@ -166,7 +170,7 @@ def main() -> int:
     aggregate = Counter()
     oof_total = 0.0
     for held, table, fallback in oof_paths:
-        result = evaluate(held, labels, table, fallback)
+        result = evaluate(held, labels, table, fallback, priors)
         oof_total += result["total"] * result["n"]
         aggregate["n"] += result["n"]
         aggregate["catastrophic"] += result["catastrophic"]
@@ -176,7 +180,7 @@ def main() -> int:
     table, fallback = fit_table(
         (decision_path(r), labels[r.case_id]["adjudication"].strip()) for r in records
     )
-    in_sample = evaluate(records, labels, table, fallback)
+    in_sample = evaluate(records, labels, table, fallback, priors)
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

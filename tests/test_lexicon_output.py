@@ -99,5 +99,37 @@ class FeeSnapSafety(unittest.TestCase):
         self.assertIsNone(snap_fee(""))
 
 
+class OutputPriorSafety(unittest.TestCase):
+    """Priors improve the serialized row and never touch a decision."""
+
+    def test_fills_only_empty_slots(self):
+        from mib.output import apply_priors
+        priors = {"fee_status": "paid", "visa_class": "MED-3"}
+        filled = apply_priors(
+            {"fee_status": "unknown", "visa_class": "XW-1"}, priors
+        )
+        self.assertEqual(filled["fee_status"], "paid")
+        self.assertEqual(filled["visa_class"], "XW-1")  # evidence untouched
+
+    def test_prior_cannot_suppress_a_guardrail_demotion(self):
+        """The guardrail sees the evidence row, so a filled fee cannot hide."""
+        from mib.output import apply_priors
+        from mib.policy import emitted_guardrail
+        from mib.record import Record
+
+        record = Record(case_id="MIB-000001")
+        evidence_row = {
+            "adjudication": "APPROVED", "risk_flags": "none",
+            "visa_class": "XW-1", "sponsor_id": "SPN-1234",
+            "home_world": "Proxima-b", "fee_status": "unknown",
+        }
+        demotion = emitted_guardrail(evidence_row, record)
+        self.assertIsNotNone(demotion)
+        self.assertEqual(demotion[0], "NEEDS_REVIEW")
+        # Filling afterwards must not change what the guardrail already decided.
+        filled = apply_priors(evidence_row, {"fee_status": "paid"})
+        self.assertEqual(filled["fee_status"], "paid")
+
+
 if __name__ == "__main__":
     unittest.main()

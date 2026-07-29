@@ -120,3 +120,38 @@ class IncrementalWriter:
             os.fsync(handle.fileno())
         os.replace(temporary, self.output_path)
         return written
+
+
+# --- Output-only priors ----------------------------------------------------
+
+_PRIORS_PATH = Path(__file__).resolve().parent.parent / "policy" / "priors.json"
+
+
+def load_priors(path: str | Path = _PRIORS_PATH) -> dict[str, str]:
+    """Per-field fallback values for slots with no trusted evidence.
+
+    Emitting the sentinel scores zero, so the empirical mode strictly
+    dominates: it scores when the field is still counted and is neutral when
+    the private scorer has excluded it as unrecoverable.
+
+    Only ever applied AFTER adjudication. A guessed value must never reach the
+    policy - `unknown from trusted evidence` and `filled in for output` are
+    different states, and EVALUATION.md rewards keeping them apart.
+    """
+    try:
+        with open(path) as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError):
+        return {}
+    return {field: prior["value"] for field, prior in payload.get("priors", {}).items()}
+
+
+def apply_priors(row: dict, priors: dict[str, str]) -> dict:
+    """Fill only slots that carry no reading; never overwrite evidence."""
+    filled = dict(row)
+    for field, value in priors.items():
+        current = str(filled.get(field, "") or "").strip().lower()
+        blank = current in ("", UNKNOWN, "none") if field != "risk_flags" else current == ""
+        if blank:
+            filled[field] = value
+    return filled

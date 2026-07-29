@@ -21,7 +21,7 @@ import traceback
 from pathlib import Path
 
 from .extract import extract_record
-from .output import IncrementalWriter
+from .output import IncrementalWriter, apply_priors, load_priors
 from .pdfio import load_packet
 from .policy import (
     Calibration,
@@ -70,6 +70,7 @@ def _row_from(record: Record, adjudication: str, confidence: float) -> dict:
 def run(input_dir: str, output_path: str) -> int:
     pdfs = sorted(str(p) for p in Path(input_dir).glob("*.pdf"))
     calibration = Calibration()
+    priors = load_priors()
     writer = IncrementalWriter(output_path)
     records: list[Record] = []
 
@@ -94,10 +95,12 @@ def run(input_dir: str, output_path: str) -> int:
         apply_corpus_context(record, reference, revoked)
         adjudication, confidence, _path = calibration.adjudicate(record)
         row = _row_from(record, adjudication, confidence)
+        # The guardrail inspects the evidence-backed row, before any prior is
+        # applied, so a filled slot can never suppress a demotion.
         demotion = emitted_guardrail(row, record)
         if demotion:
             row["adjudication"], row["confidence"] = demotion
-        final_rows.append(row)
+        final_rows.append(apply_priors(row, priors))
 
     written = writer.rewrite_all(final_rows)
     print(f"wrote {written} predictions to {output_path}", file=sys.stderr)

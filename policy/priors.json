@@ -1,0 +1,29 @@
+{
+  "fitted_from": "train_labels.csv",
+  "priors": {
+    "declared_purpose": {
+      "rate": 0.123,
+      "value": "reactor maintenance"
+    },
+    "fee_status": {
+      "rate": 0.664,
+      "value": "paid"
+    },
+    "home_world": {
+      "rate": 0.107,
+      "value": "Luyten-b"
+    },
+    "risk_flags": {
+      "rate": 0.535,
+      "value": "none"
+    },
+    "species_code": {
+      "rate": 0.099,
+      "value": "TRIANGULAN"
+    },
+    "visa_class": {
+      "rate": 0.287,
+      "value": "MED-3"
+    }
+  }
+}
