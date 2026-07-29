@@ -260,7 +260,31 @@ def extract_record(packet: Packet) -> Record:
         elif _WAIVER_CODE_RE.search(full_text):
             record.fee_status = "waived"
 
+    # Targeted cell re-reads fill fields whole-page OCR never surfaced. They
+    # pass through the same vocabulary snapping as any other reading, so a
+    # garbled crop is rejected rather than trusted.
+    roi = packet.roi_values
+    if record.fee_status == UNKNOWN and "fee_status" in roi:
+        recovered = _parse_fee(roi["fee_status"])
+        if recovered:
+            record.fee_status = recovered
+            record.fee_explicit_unknown = recovered == "unknown"
+    if record.visa_class == UNKNOWN and "visa_class" in roi:
+        record.visa_class = snap_visa(roi["visa_class"]) or UNKNOWN
+    if record.sponsor_id == UNKNOWN and "sponsor_id" in roi:
+        record.sponsor_id = repair_sponsor_id(roi["sponsor_id"]) or UNKNOWN
+    if record.arrival_date == UNKNOWN and "arrival_date" in roi:
+        record.arrival_date = parse_date(roi["arrival_date"]) or UNKNOWN
+    if record.species_code == UNKNOWN and "species_code" in roi:
+        record.species_code = snap_species(roi["species_code"]) or UNKNOWN
+
     flags, flags_seen = _extract_flags(all_lines, full_text)
+    if not flags_seen and "risk_flags" in roi:
+        roi_flags, roi_seen = _extract_flags(
+            [f"Observed flags: {roi['risk_flags']}"], roi["risk_flags"]
+        )
+        if roi_seen:
+            flags, flags_seen = roi_flags, True
     record.risk_flags = flags
     record.risk_flags_known = flags_seen
 

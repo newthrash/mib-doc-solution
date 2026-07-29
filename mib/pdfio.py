@@ -32,6 +32,10 @@ UNTRUSTED_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Word boxes from the most recent _tesseract call, so a page's ROI pass can
+# reuse the recognition the page pass already paid for.
+_LAST_BOXES: list = []
+
 _MIN_FONT_SIZE = 4.5
 _MIN_CONTRAST = 28.0
 _MIN_CROP_OVERLAP = 0.75
@@ -40,6 +44,8 @@ _MIN_CROP_OVERLAP = 0.75
 @dataclass
 class Page:
     number: int
+    boxes: list = field(default_factory=list)   # word boxes, PDF points
+    box_dpi: int = 220
     kind: str = "unknown"
     visible_native: str = ""
     hidden_native: str = ""
@@ -62,6 +68,10 @@ class Packet:
     error: str | None = None
     stamp_verdict: str | None = None
     stamp_contested: bool = False
+    # Raw text recovered by targeted cell re-reads, keyed by field. Values are
+    # unsnapped: callers run them through the field's vocabulary so a garbled
+    # crop is rejected downstream rather than trusted here.
+    roi_values: dict = field(default_factory=dict)
 
     @property
     def injection_detected(self) -> bool:
@@ -160,7 +170,12 @@ def _tesseract(
         return "", 0.0
     if result.returncode != 0:
         return "", 0.0
-    return _tsv_lines(result.stdout.decode("utf-8", errors="replace"))
+    text, confidence, boxes = _tsv_parse(
+        result.stdout.decode("utf-8", errors="replace")
+    )
+    _LAST_BOXES.clear()
+    _LAST_BOXES.extend(boxes)
+    return text, confidence
 
 
 def _tesseract_tsv(gray: np.ndarray, psm: int = 3) -> list[tuple[str, int, int, int, int]]:
@@ -199,8 +214,15 @@ def _tesseract_tsv(gray: np.ndarray, psm: int = 3) -> list[tuple[str, int, int, 
 
 
 def _tsv_lines(tsv: str) -> tuple[str, float]:
+    text, confidence, _ = _tsv_parse(tsv)
+    return text, confidence
+
+
+def _tsv_parse(tsv: str) -> tuple[str, float, list]:
+    """Return (line text, mean confidence, word boxes) from one TSV parse."""
     groups: dict[tuple[str, str, str, str], list[tuple[int, str]]] = {}
     confidences: list[float] = []
+    boxes: list[tuple[str, int, int, int, int]] = []
     for raw in tsv.splitlines():
         parts = raw.split("\t", 11)
         if len(parts) != 12 or parts[0] == "level":
@@ -219,8 +241,16 @@ def _tsv_lines(tsv: str) -> tuple[str, float]:
         except ValueError:
             left = 0
         groups.setdefault((parts[1], parts[2], parts[3], parts[4]), []).append((left, word))
+        try:
+            boxes.append((word, left, int(parts[7]), int(parts[8]), int(parts[9])))
+        except ValueError:
+            pass
     lines = [" ".join(w for _, w in sorted(words)) for words in groups.values()]
-    return "\n".join(lines), float(np.mean(confidences)) if confidences else 0.0
+    return (
+        "\n".join(lines),
+        float(np.mean(confidences)) if confidences else 0.0,
+        boxes,
+    )
 
 
 def _enhance(gray: np.ndarray) -> np.ndarray:
@@ -259,7 +289,7 @@ def _score(text: str, confidence: float) -> float:
     return confidence + 14.0 * _anchor_count(text) + min(18.0, len(body) / 30.0)
 
 
-def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float]:
+def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float, list, int]:
     """OCR with bounded escalation, ordered by what actually works here.
 
     PSM 3 (full auto segmentation) reads these structured forms far better
@@ -269,11 +299,12 @@ def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float]:
     """
     gray = render_gray(page, dpi=dpi)
     best = _tesseract(gray, psm=3)
+    best_boxes, best_dpi = list(_LAST_BOXES), dpi
 
     if _anchor_count(best[0]) < 2:
         candidate = _tesseract(gray, psm=11)
         if _score(*candidate) > _score(*best):
-            best = candidate
+            best, best_boxes, best_dpi = candidate, list(_LAST_BOXES), dpi
 
     # A page whose body is still unrecovered earns one high-resolution,
     # contrast-stretched pass - the expensive rung, reserved for pages that
@@ -283,7 +314,7 @@ def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float]:
         for variant in (dense, _enhance(dense)):
             candidate = _tesseract(variant, psm=3)
             if _score(*candidate) > _score(*best):
-                best = candidate
+                best, best_boxes, best_dpi = candidate, list(_LAST_BOXES), 300
             if _anchor_count(best[0]) >= 2:
                 break
 
@@ -292,10 +323,12 @@ def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float]:
         for turns in (1, 3, 2):
             candidate = _tesseract(np.ascontiguousarray(np.rot90(gray, turns)), psm=3)
             if _score(*candidate) > _score(*best):
-                best = candidate
+                # Rotated boxes do not map back to page coordinates, so the
+                # ROI pass is disabled for this page rather than misled.
+                best, best_boxes, best_dpi = candidate, [], dpi
             if _anchor_count(best[0]) >= 2:
                 break
-    return best
+    return best[0], best[1], best_boxes, best_dpi
 
 
 def classify_page(text: str) -> str:
@@ -342,10 +375,13 @@ def load_packet(pdf_path: str, dpi: int = 220) -> Packet:
                 # scan. Measure only the body.
                 is_scanned = len(_FOOTER_RE.sub("", visible).strip()) < 40
                 try:
-                    ocr_text, ocr_confidence = ocr_page(page, dpi=dpi)
+                    ocr_text, ocr_confidence, page_boxes, box_dpi = ocr_page(
+                        page, dpi=dpi
+                    )
                     ocr_text, injected_ocr = scrub(ocr_text)
                 except Exception:
                     injected_ocr = False
+                    page_boxes, box_dpi = [], dpi
                 packet.pages.append(
                     Page(
                         number=index + 1,
@@ -354,11 +390,78 @@ def load_packet(pdf_path: str, dpi: int = 220) -> Packet:
                         hidden_native=hidden,
                         ocr_text=ocr_text,
                         ocr_confidence=ocr_confidence,
+                        boxes=page_boxes,
+                        box_dpi=box_dpi,
                         is_scanned=is_scanned,
                         injection_seen=bool(hidden.strip()) or injected_visible
                         or injected_hidden or injected_ocr,
                     )
                 )
+            _recover_cells(document, packet)
     except Exception as error:  # noqa: BLE001 - one bad packet must not kill the run
         packet.error = f"{type(error).__name__}: {error}"
     return packet
+
+
+# Fields worth a targeted second look. Extraction misses are overwhelmingly
+# blank rather than wrong - whole-page OCR never found the value - so a cell
+# re-read is recall we are otherwise leaving on the table.
+_ROI_FIELDS = ("fee_status", "risk_flags", "visa_class", "sponsor_id",
+               "arrival_date", "species_code")
+
+
+def _recover_cells(document: "pymupdf.Document", packet: Packet) -> None:
+    """Re-read value cells for fields the page pass did not surface.
+
+    Only pages whose text lacks the field's label are skipped; a page that
+    shows the label but no value is exactly the case this recovers.
+    """
+    from .roi import find_label, read_value
+
+    # Attempt every ROI field whose label is locatable. Gating on "the label
+    # is absent from the page text" was circular: a label missing from the text
+    # is equally missing from the word boxes, so the pass could only fire where
+    # it had already excluded itself. Which recoveries are actually used is
+    # decided during extraction, where the blank fields are known.
+    wanted = list(_ROI_FIELDS)
+
+    for index, page in enumerate(document):
+        if not wanted:
+            break
+        if index >= len(packet.pages) or not packet.pages[index].is_scanned:
+            continue
+        stored = packet.pages[index]
+        if not stored.boxes:
+            continue
+        scale = 72.0 / stored.box_dpi
+        boxes = [
+            (w, x * scale, y * scale, (x + bw) * scale, (y + bh) * scale)
+            for w, x, y, bw, bh in stored.boxes
+        ]
+        for field_name in list(wanted):
+            if find_label(boxes, field_name) is None:
+                continue
+            try:
+                value = read_value(page, field_name, boxes, dpi=600)
+            except Exception:  # noqa: BLE001
+                continue
+            if value:
+                packet.roi_values[field_name] = value
+                wanted.remove(field_name)
+
+
+# Retained for diagnostics; the recovery pass no longer gates on it.
+_ROI_LABEL_HINTS = {
+    "fee_status": "fee status",
+    "risk_flags": "observed flags",
+    "visa_class": "visa class",
+    "sponsor_id": "sponsor id",
+    "arrival_date": "arrival date",
+    "species_code": "species code",
+}
+
+
+def _label_present(text: str, field_name: str) -> bool:
+    hint = _ROI_LABEL_HINTS[field_name]
+    normalized = re.sub(r"[^a-z ]+", " ", text.lower())
+    return hint in re.sub(r"\s+", " ", normalized)
