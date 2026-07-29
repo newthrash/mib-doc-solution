@@ -135,6 +135,18 @@ def decision_path(record: Record) -> str:
         return "disqualifying_flag"
     if record.fee_status == "unpaid" and not record.has_hardship_waiver:
         return "fee_unpaid"
+    # A stated embargo is visible evidence and travels; the mined world list
+    # below is a fallback for packets whose registry page could not be read,
+    # and is deliberately secondary because it cannot cover unseen worlds.
+    # "CLEAR" is not treated as evidence of cleanliness - it accompanies
+    # approvals only 35% of the time and must not license an approval.
+    if (
+        record.registry_status
+        and "EMBARGO" in record.registry_status
+        and visa_known
+        and record.visa_class != "DIP-1"
+    ):
+        return "registry_embargo"
     if (
         record.home_world in EMBARGOED_HOME_WORLDS
         and visa_known

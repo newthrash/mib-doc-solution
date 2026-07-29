@@ -105,6 +105,40 @@ class OracleFloor(unittest.TestCase):
         self.assertLessEqual(catastrophic, 5)
 
 
+class TransferSafety(unittest.TestCase):
+    """Rules must key on read evidence, not on constants mined from train."""
+
+    def test_stated_embargo_denies_any_world(self):
+        """A world absent from the mined list is still caught when stated.
+
+        EMBARGO REVIEW appears for three different home worlds in the public
+        corpus; a private set may use others. Reading the status travels,
+        a hardcoded world list does not.
+        """
+        record = Record(
+            case_id="MIB-000001", visa_class="XW-1", sponsor_id="SPN-1234",
+            home_world="Some-Unseen-World", registry_status="EMBARGO REVIEW",
+        )
+        self.assertEqual(decision_path(record), "registry_embargo")
+
+    def test_diplomatic_exemption_survives(self):
+        record = Record(
+            case_id="MIB-000001", visa_class="DIP-1",
+            home_world="Some-Unseen-World", registry_status="EMBARGO REVIEW",
+        )
+        self.assertNotEqual(decision_path(record), "registry_embargo")
+
+    def test_clear_status_does_not_license_approval(self):
+        """CLEAR accompanies approvals only 35% of the time; it is not proof."""
+        record = Record(
+            case_id="MIB-000001", visa_class="XW-1", sponsor_id="SPN-1234",
+            registry_status="CLEAR", risk_flags_known=False,
+            has_scanned_pages=True, arrival_date="2026-06-01",
+            receipt_date="2026-07-01",
+        )
+        self.assertEqual(decision_path(record), "risk_page_unreadable")
+
+
 class ApprovalSafety(unittest.TestCase):
     """Approvals are fail-closed: evidence gaps can never grant authorization."""
 

@@ -35,6 +35,7 @@ class Record:
     receipt_date: str | None = None       # read from the packet when possible
     has_hardship_waiver: bool = False     # visible hardship waiver text
     has_diplomatic_note: bool = False     # valid diplomatic note (stale exemption)
+    registry_status: str | None = None    # e.g. CLEAR, EMBARGO REVIEW
     manual_finding: str | None = None     # visible signed adjudicator finding
     stamp_verdict: str | None = None      # uncancelled vector stamp, if any
     stamp_contested: bool = False         # stamps disagree, or all struck

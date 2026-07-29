@@ -72,6 +72,12 @@ _SPONSOR_CORRECTION_RE = re.compile(
 _SPONSOR_PROSE_RE = re.compile(
     r"\bSPONSOR\s+(S[PFR][NRM][-\s]?[0-9OQDILZSBGT]{4})\b", re.IGNORECASE
 )
+# The registry extract states an embargo outright. Reading it beats inferring
+# one from a mined world list: on the public corpus EMBARGO REVIEW appears for
+# three different home worlds, and a private set may use others entirely.
+_REGISTRY_STATUS_RE = re.compile(
+    r"REGISTRY\s+STATUS\s*[:\n]?\s*([A-Z][A-Z ]{2,25})", re.IGNORECASE
+)
 _WAIVER_CODE_RE = re.compile(
     r"WAIVER\s+CODE\s*[:\-]?\s*(?!N/?A\b)([A-Z][A-Z0-9-]{2,})", re.IGNORECASE
 )
@@ -294,6 +300,8 @@ def extract_record(packet: Packet) -> Record:
     record.has_diplomatic_note = bool(
         re.search(r"DIPLOMATIC\s+NOTE", full_text, re.IGNORECASE)
     )
+    if match := _REGISTRY_STATUS_RE.search(full_text):
+        record.registry_status = " ".join(match.group(1).split()).upper()
     if match := _RECEIPT_RE.search(full_text):
         record.receipt_date = match.group(1)
 
