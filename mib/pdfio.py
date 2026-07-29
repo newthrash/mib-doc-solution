@@ -131,7 +131,9 @@ def scrub(text: str) -> tuple[str, bool]:
     return "\n".join(kept), seen
 
 
-def _tesseract(gray: np.ndarray, psm: int, timeout: int = 25) -> tuple[str, float]:
+def _tesseract(
+    gray: np.ndarray, psm: int, timeout: int = 25, allowlist: str | None = None
+) -> tuple[str, float]:
     import cv2
 
     ok, encoded = cv2.imencode(".png", gray)
@@ -139,10 +141,14 @@ def _tesseract(gray: np.ndarray, psm: int, timeout: int = 25) -> tuple[str, floa
         return "", 0.0
     env = os.environ.copy()
     env.setdefault("OMP_THREAD_LIMIT", "1")
+    command = ["tesseract", "stdin", "stdout", "--dpi", "220", "--psm", str(psm),
+               "-l", "eng", "-c", "preserve_interword_spaces=1"]
+    if allowlist:
+        command += ["-c", f"tessedit_char_whitelist={allowlist}"]
+    command.append("tsv")
     try:
         result = subprocess.run(
-            ["tesseract", "stdin", "stdout", "--dpi", "220", "--psm", str(psm),
-             "-l", "eng", "-c", "preserve_interword_spaces=1", "tsv"],
+            command,
             input=encoded.tobytes(),
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -155,6 +161,41 @@ def _tesseract(gray: np.ndarray, psm: int, timeout: int = 25) -> tuple[str, floa
     if result.returncode != 0:
         return "", 0.0
     return _tsv_lines(result.stdout.decode("utf-8", errors="replace"))
+
+
+def _tesseract_tsv(gray: np.ndarray, psm: int = 3) -> list[tuple[str, int, int, int, int]]:
+    """OCR and return raw word boxes: (word, left, top, width, height)."""
+    import cv2
+
+    ok, encoded = cv2.imencode(".png", gray)
+    if not ok:
+        return []
+    env = os.environ.copy()
+    env.setdefault("OMP_THREAD_LIMIT", "1")
+    try:
+        result = subprocess.run(
+            ["tesseract", "stdin", "stdout", "--dpi", "220", "--psm", str(psm),
+             "-l", "eng", "tsv"],
+            input=encoded.tobytes(), stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, check=False, env=env, timeout=25,
+        )
+    except subprocess.SubprocessError:
+        return []
+    if result.returncode != 0:
+        return []
+    words = []
+    for raw in result.stdout.decode("utf-8", errors="replace").splitlines():
+        parts = raw.split("\t", 11)
+        if len(parts) != 12 or parts[0] == "level":
+            continue
+        word = parts[11].strip()
+        if not word:
+            continue
+        try:
+            words.append((word, int(parts[6]), int(parts[7]), int(parts[8]), int(parts[9])))
+        except ValueError:
+            continue
+    return words
 
 
 def _tsv_lines(tsv: str) -> tuple[str, float]:
