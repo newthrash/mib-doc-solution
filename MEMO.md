@@ -7,10 +7,10 @@ through `run_docker_submission.py` under the published contract.
 
 | | Training set | Out of fold |
 | --- | ---: | ---: |
-| Field extraction | 41.63 / 50 | 41.63 / 50 |
-| Classification | 60.93 / 80 | — |
-| Calibration | 15.89 / 20 | — |
-| **Total** | **118.44 / 150** | **116.82 / 150** |
+| Field extraction | 42.32 / 50 | 42.32 / 50 |
+| Classification | 61.13 / 80 | — |
+| Calibration | 15.90 / 20 | — |
+| **Total** | **119.34 / 150** | **117.98 / 150** |
 | Catastrophic false approvals | 1 | 1 |
 
 The out-of-fold column is the number I would bet on. Each held-out packet is
@@ -18,7 +18,7 @@ scored by a calibration table fitted without it, across five folds. The
 training column is in-sample and optimistic; I report both because the gap is
 the part most easily mistaken for progress.
 
-Runtime 0.95 s/PDF against a 6 s budget, image 0.15 GiB against 4 GiB, 1000/1000
+Runtime 1.16 s/PDF against a 6 s budget, image 0.15 GiB against 4 GiB, 1000/1000
 structurally valid rows, no missing, extra, duplicate or invalid records.
 
 ## Approach
@@ -111,11 +111,25 @@ and measured Brier already beats the perfect-calibration floor for this accuracy
 There is no calibration headroom to recover; the section score rises only when
 classification does.
 
-**Known regression.** Ranking candidates by document precedence improved four
-fields and moved `applicant_name` from 113 to 125 wrong readings. Net positive
-and shipped, but not yet understood.
+**Approval-certifying gates were searched for and rejected.** 191 truly
+approved packets sit on non-approving paths - the entire distance to the
+field's strongest honest out-of-fold score. A systematic search over ~2,000
+visible-evidence conjunctions, with rules fixed in advance (zero denials in
+any fold, minimum coverage), surfaced 23 denial-free gates. Nearly all were
+what chance predicts at that search size. The one principled gate - DIP-1
+with the risk panel actually read and clean, 91% approved - still lost more
+calibration than it gained in classification, so nothing shipped. The
+negative result stands: with the evidence this pipeline extracts, those
+approvals are not safely recoverable, and the hedging that costs them is
+correct rather than timid.
 
-**A hypothesis I got wrong.** I attributed wrong applicant names to the
+**Decoy values vindicate refusing to guess.** Among packets whose field is
+blank but whose label is visible, some visibly state a value that contradicts
+the truth ('Visa Class: XW-1' where the case is XW-2). A greedier extractor
+would emit those as confident wrong fields - the exact input that feeds a
+false approval. The blanks were the better outcome.
+
+**Hypotheses I got wrong.** I attributed wrong applicant names to the
 multi-applicant packet trap and implemented case-scoped page filtering. A scan of
 all 1,000 packets found 2 mentioning a foreign case id, both placeholders. The
 code was reverted rather than kept as harmless — a mangled case id would have
