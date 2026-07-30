@@ -129,12 +129,20 @@ the truth ('Visa Class: XW-1' where the case is XW-2). A greedier extractor
 would emit those as confident wrong fields - the exact input that feeds a
 false approval. The blanks were the better outcome.
 
-**Hypotheses I got wrong.** I attributed wrong applicant names to the
-multi-applicant packet trap and implemented case-scoped page filtering. A scan of
-all 1,000 packets found 2 mentioning a foreign case id, both placeholders. The
-code was reverted rather than kept as harmless — a mangled case id would have
-excluded legitimate pages. The real cause was tie-breaking by page position,
-which let an unclassified page outrank a biometric slip.
+**Hypotheses I got wrong.** Three, each reverted when measurement disagreed.
+(1) Wrong applicant names attributed to the multi-applicant packet trap: a
+scan of all 1,000 packets found 2 mentioning a foreign case id, both
+placeholders; the code was reverted rather than kept as harmless — a mangled
+case id would have excluded legitimate pages. The real cause was tie-breaking
+by page position, which let an unclassified page outrank a biometric slip.
+(2) Ranking candidates by document authority ahead of cross-page agreement:
+it silently replaced 61 correct names with names from other pages, a
+regression the aggregate score masked until a per-case diff exposed it.
+(3) An OCR confusion model estimated from page-footer known plaintext — the
+footers supply free aligned truth on damaged rasters — correctly identified
+this generator's damage cluster (thin vertical glyphs: e, i, l, r), but
+adding the measured pairs did not survive out-of-fold measurement. The tool
+and the finding remain in the repository; the change does not.
 
 ## With another week
 
