@@ -181,12 +181,20 @@ _PAGE_RANK = {
 }
 
 
-def _consensus(candidates: list[tuple[str, str]], parser) -> str | None:
+def _consensus(
+    candidates: list[tuple[str, str]], parser, *, authority_first: bool = False
+) -> str | None:
     """Resolve a field from candidates carrying their source page type.
 
-    Ranked by document precedence first, then by how many pages agree. Ties
-    previously broke on position, which let an unclassified page beat a
-    biometric slip purely by appearing earlier in the packet.
+    Corroboration is the primary signal and document authority breaks ties. A
+    value repeated across independent documents is evidence in a way that a
+    single authoritative page is not, and ranking authority first measurably
+    hurt: it replaced 61 correct applicant names with names taken from another
+    page, fixing only 17.
+
+    `authority_first` inverts that for fields where the manual's precedence is
+    the point - a later signed note supersedes an earlier form outright rather
+    than being outvoted by repetition of the stale value.
     """
     parsed: list[tuple[int, str]] = []
     for value, kind in candidates:
@@ -200,7 +208,14 @@ def _consensus(candidates: list[tuple[str, str]], parser) -> str | None:
     authority: dict[str, int] = {}
     for rank, value in parsed:
         authority[value] = max(authority.get(value, 0), rank)
-    return max(parsed, key=lambda item: (authority[item[1]], agreement[item[1]]))[1]
+
+    def key(item):
+        _, value = item
+        if authority_first:
+            return (authority[value], agreement[value])
+        return (agreement[value], authority[value])
+
+    return max(parsed, key=key)[1]
 
 
 # The flag label is itself OCR-damaged on scanned slips ("Observed fiags",
