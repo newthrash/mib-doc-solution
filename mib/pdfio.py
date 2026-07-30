@@ -407,7 +407,7 @@ def load_packet(pdf_path: str, dpi: int = 220) -> Packet:
 # blank rather than wrong - whole-page OCR never found the value - so a cell
 # re-read is recall we are otherwise leaving on the table.
 _ROI_FIELDS = ("fee_status", "risk_flags", "visa_class", "sponsor_id",
-               "arrival_date", "species_code")
+               "arrival_date", "species_code", "declared_purpose", "home_world")
 
 
 def _recover_cells(document: "pymupdf.Document", packet: Packet) -> None:
@@ -428,9 +428,15 @@ def _recover_cells(document: "pymupdf.Document", packet: Packet) -> None:
     for index, page in enumerate(document):
         if not wanted:
             break
-        if index >= len(packet.pages) or not packet.pages[index].is_scanned:
+        if index >= len(packet.pages):
             continue
         stored = packet.pages[index]
+        # Previously gated on is_scanned, which excluded exactly the pages
+        # where the label is legible but the value cell is damaged - measured
+        # at 45-48% of blank sponsor/purpose packets. Any page whose word
+        # boxes locate the label is now eligible; digital pages whose native
+        # text already yielded the value are filtered upstream because their
+        # fields are not blank.
         if not stored.boxes:
             continue
         scale = 72.0 / stored.box_dpi

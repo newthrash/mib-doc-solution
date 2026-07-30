@@ -123,12 +123,38 @@ def _is_noise(line: str) -> bool:
     return stripped.upper().rstrip(":") in _ALL_LABELS
 
 
+def _fuzzy_label_prefix(stripped: str, label: str) -> str | None:
+    """Match a possibly OCR-damaged label at the start of a line.
+
+    'Sponser ID: SPN-8802' carries a perfect value behind a misspelled label;
+    exact prefix matching threw the value away. Each label word may differ by
+    up to a third of its characters - safe on printed form labels in a way it
+    would not be on values, and any junk this admits is still filtered by the
+    field's own parser and vocabulary snap.
+    """
+    from .lexicon import weighted_distance
+
+    label_words = label.split()
+    line_words = stripped.split()
+    if len(line_words) < len(label_words):
+        return None
+    for expected, seen in zip(label_words, line_words):
+        cleaned = re.sub(r"[^A-Za-z]", "", seen).upper()
+        if not cleaned:
+            return None
+        if weighted_distance(cleaned, expected) / len(expected) > 0.34:
+            return None
+    return " ".join(line_words[len(label_words):]).lstrip(" :.|-\t")
+
+
 def _labeled_values(lines: list[str], labels: tuple[str, ...]) -> list[str]:
     """Collect values for `labels` in both packet layouts.
 
     Layout A (native form text): the label occupies its own line and the value
     is the next non-noise line. Layout B (OCR of the same page): the label and
-    value share a line, separated by a colon.
+    value share a line, separated by a colon. Labels are matched exactly first
+    and fuzzily second, so damaged labels ('Sponser ID', 'Visa Cisse') no
+    longer strand intact values.
     """
     values: list[str] = []
     for index, line in enumerate(lines):
@@ -147,6 +173,16 @@ def _labeled_values(lines: list[str], labels: tuple[str, ...]) -> list[str]:
                 remainder = stripped[len(label):].lstrip(" :.|-\t")
                 if remainder and not _is_noise(remainder):
                     values.append(remainder)
+                break
+            remainder = _fuzzy_label_prefix(stripped, label)
+            if remainder is not None:
+                if remainder and not _is_noise(remainder):
+                    values.append(remainder)
+                elif not remainder:
+                    for candidate in lines[index + 1: index + 3]:
+                        if not _is_noise(candidate):
+                            values.append(candidate.strip())
+                            break
                 break
     return values
 
@@ -353,6 +389,10 @@ def extract_record(packet: Packet) -> Record:
         record.arrival_date = parse_date(roi["arrival_date"]) or UNKNOWN
     if record.species_code == UNKNOWN and "species_code" in roi:
         record.species_code = snap_species(roi["species_code"]) or UNKNOWN
+    if record.declared_purpose == UNKNOWN and "declared_purpose" in roi:
+        record.declared_purpose = snap_purpose(roi["declared_purpose"]) or UNKNOWN
+    if record.home_world == UNKNOWN and "home_world" in roi:
+        record.home_world = snap_home_world(roi["home_world"]) or UNKNOWN
 
     flags, flags_seen = _extract_flags(all_lines, full_text)
     if not flags_seen and "risk_flags" in roi:

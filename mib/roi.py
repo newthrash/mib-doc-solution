@@ -42,6 +42,8 @@ ALLOWLISTS = {
     "arrival_date": "0123456789-",
     "species_code": "ABCDEFGHIJKLMNOPQRSTUVWXYZ_",
     "risk_flags": "abcdefghijklmnopqrstuvwxyz_|,",
+    "declared_purpose": "abcdefghijklmnopqrstuvwxyz ",
+    "home_world": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ",
 }
 
 # Labels are multi-word, and a single word is ambiguous ("Status" also ends
@@ -54,6 +56,8 @@ _LABEL_TOKENS = {
     "arrival_date": ("arrival", "date"),
     "species_code": ("species", "code"),
     "risk_flags": ("observed", "flags"),
+    "declared_purpose": ("declared", "purpose"),
+    "home_world": ("home", "world"),
 }
 
 # OCR damage to the label itself is tolerated: these are printed form text, so
