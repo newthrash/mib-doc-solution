@@ -34,6 +34,17 @@ BOILERPLATE = "Synthetic hiring challenge document"
 _FOOTER_HINT = re.compile(r"(synth|hiring|challenge|document|packet|page)", re.IGNORECASE)
 
 
+def _distance(a: str, b: str) -> int:
+    previous = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        current = [i]
+        for j, cb in enumerate(b, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1,
+                               previous[j - 1] + (ca != cb)))
+        previous = current
+    return previous[-1]
+
+
 def align_ops(truth: str, observed: str):
     """Yield ('sub', a, b) pairs from an edit-distance backtrace."""
     n, m = len(truth), len(observed)
@@ -85,7 +96,15 @@ def _scan(pdf_path: str) -> Counter:
                 for truth in expected:
                     if not lines:
                         break
-                    best = min(lines, key=lambda l: abs(len(l) - len(truth)))
+                    # Only align a line that is genuinely a damaged copy of the
+                    # expected text. Picking the nearest by length alone let an
+                    # unrelated line align against the footer and manufacture
+                    # impossible confusions ('y' -> 'P', 'd' -> '/').
+                    scored = [(_distance(truth, l) / max(1, len(truth)), l)
+                              for l in lines]
+                    ratio, best = min(scored)
+                    if ratio > 0.35:
+                        continue
                     for a, b in align_ops(truth, best):
                         if a.strip() and b.strip():
                             pairs[(a, b)] += 1

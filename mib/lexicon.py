@@ -15,6 +15,14 @@ from functools import lru_cache
 from .constants import HOME_WORLDS, PURPOSES, SPECIES_CODES, VISA_CLASSES
 
 # Substitution cost for glyph pairs OCR habitually confuses.
+#
+# tools/fit_confusions.py measures this corpus's real error model by aligning
+# OCR of each page footer against the footer text we already know - no labels
+# needed. It found the damage concentrated in one cluster of thin vertical
+# glyphs (e, i, l, r), which explains the residual name errors. Adding the two
+# pairs it surfaced that were absent here, E<->I and L<->R, was measured and
+# did NOT help (out-of-fold 117.10 -> 117.09, one more wrong name), so it is
+# not applied. The finding is kept; the change is not.
 _CONFUSABLE = {
     ("0", "O"), ("0", "Q"), ("0", "D"), ("1", "I"), ("1", "L"), ("1", "T"),
     ("2", "Z"), ("5", "S"), ("6", "G"), ("8", "B"), ("7", "T"), ("4", "A"),
