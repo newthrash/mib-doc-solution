@@ -80,6 +80,41 @@ _SPONSOR_PROSE_RE = re.compile(
 _REGISTRY_STATUS_RE = re.compile(
     r"REGISTRY\s+STATUS\s*[:\n]?\s*([A-Z][A-Z ]{2,25})", re.IGNORECASE
 )
+# Packets mark destroyed fields inline: [NAME CUT OUT], [SPONSOR ID BLANK],
+# [SPECIES WHITEOUT], [FEE STATUS OBSCURED], [VISA CLASS TORN]. These are the
+# document stating a field is unrecoverable - stronger evidence than our own
+# failure to read one. Measured on the public corpus: 38 tags across 27 of 400
+# packets, and in five of those we were extracting a value anyway for a field
+# the document says is gone. A phantom sponsor can invent or erase a
+# revocation, so a tagged field is forced blank rather than trusted.
+_DAMAGE_TAG_RE = re.compile(r"\[([A-Z][A-Z ]{2,28})\]")
+_DAMAGE_WORDS = ("CUT OUT", "BLANK", "WHITEOUT", "LOST", "WASHED", "OBSCURED",
+                 "TORN", "ILLEGIBLE", "MISSING", "REDACTED", "UNREADABLE")
+_TAG_FIELDS = (
+    ("SPONSOR", "sponsor_id"),
+    ("SPECIES", "species_code"),
+    ("VISA", "visa_class"),
+    ("FEE", "fee_status"),
+    ("PURPOSE", "declared_purpose"),
+    ("WORLD", "home_world"),
+    ("DATE", "arrival_date"),
+    ("NAME", "applicant_name"),
+)
+
+
+def _damaged_fields(text: str) -> set[str]:
+    """Fields the packet itself marks as destroyed."""
+    damaged: set[str] = set()
+    for tag in _DAMAGE_TAG_RE.findall(text):
+        if not any(word in tag for word in _DAMAGE_WORDS):
+            continue
+        for token, field in _TAG_FIELDS:
+            if token in tag:
+                damaged.add(field)
+                break
+    return damaged
+
+
 _WAIVER_CODE_RE = re.compile(
     r"WAIVER\s+CODE\s*[:\-]?\s*(?!N/?A\b)([A-Z][A-Z0-9-]{2,})", re.IGNORECASE
 )
@@ -468,6 +503,15 @@ def extract_record(packet: Packet) -> Record:
         record.registry_status = " ".join(match.group(1).split()).upper()
     if match := _RECEIPT_RE.search(full_text):
         record.receipt_date = match.group(1)
+
+    # A field the document marks destroyed is not read, whatever OCR produced
+    # for it. Extraction scores blank and wrong identically, but a wrong value
+    # reaches the policy and a blank one does not.
+    for field in _damaged_fields(full_text):
+        setattr(record, field, UNKNOWN)
+        if field == "risk_flags":
+            record.risk_flags_known = False
+    record.documented_damage = bool(_damaged_fields(full_text))
 
     record.stamp_verdict = packet.stamp_verdict
     record.stamp_contested = packet.stamp_contested

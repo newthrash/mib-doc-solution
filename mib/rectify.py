@@ -42,6 +42,12 @@ _MIN_COMPONENTS = 8
 _MAX_SKEW_DEG = 8.0
 _MIN_SKEW_DEG = 0.3
 
+# Calibrated on the block-ink distribution across pages the pipeline fails:
+# ink_mean is bimodal (min 20 / p25 20 / med 111 / max 149), stroke_ratio
+# medians 2.75 with the merged-glyph tail above 3.1.
+_FAINT_INK = 70.0
+_BLOATED_STROKE = 3.1
+
 
 @dataclass
 class Block:
@@ -105,20 +111,30 @@ def locate_block(page: pymupdf.Page) -> Block | None:
     y1 = max(b[1] + b[3] for b in selected)
     pad = int((y1 - y0) * 0.25) + 6
 
-    # Damage profile from the block's own ink, not the whole page.
+    # Damage profile from the block's own ink, calibrated against the measured
+    # distribution over failing pages rather than invented. Earlier thresholds
+    # (max-minus-min spread, 28% coverage) never fired on any page: a stage
+    # that cannot trigger is worse than no stage, because it looks like one.
     region = gray[max(0, y0 - pad):min(height, y1 + pad),
                   max(0, x0 - pad):min(width, x1 + pad * 4)]
-    ink = region < 150
-    coverage = float(ink.mean()) if ink.size else 0.0
-    spread = float(region.max()) - float(region.min()) if region.size else 0.0
+    ink = region[region < 200]
+    ink_mean = float(ink.mean()) if ink.size else 255.0
+    binary = (region < 160).astype(np.uint8)
+    eroded = cv2.erode(binary, np.ones((3, 3), np.uint8))
+    stroke = float(binary.sum() / max(1, binary.sum() - eroded.sum()))
 
     return Block(
         x0=max(0, x0 - pad) / width,
         y0=max(0, y0 - pad) / height,
         x1=min(width, x1 + pad * 4) / width,
         y1=min(height, y1 + pad) / height,
-        faint=spread < 140,
-        bloated=coverage > 0.28,
+        # Ink intensity is bimodal across failing pages: black text sits near
+        # 20, washed-out text between 110 and 150. Anything above the trough
+        # is faint and wants contrast.
+        faint=ink_mean > _FAINT_INK,
+        # Stroke ratio (ink area over erosion boundary) medians 2.75; the
+        # merged-glyph pages sit in the upper tail.
+        bloated=stroke > _BLOATED_STROKE,
     )
 
 

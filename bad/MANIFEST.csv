@@ -1,0 +1,109 @@
+class,page,confidence,why
+cfa,MIB-000865_p1,0.83,"said APPROVED, truth DENIED (visa=TRANSIT-7 flags=none fee=waived sponsor=SPN-4146)"
+cfa,MIB-000865_p2,0.83,"said APPROVED, truth DENIED (visa=TRANSIT-7 flags=none fee=waived sponsor=SPN-4146)"
+cfa,MIB-000865_p3,0.83,"said APPROVED, truth DENIED (visa=TRANSIT-7 flags=none fee=waived sponsor=SPN-4146)"
+cfa,MIB-000865_p4,0.83,"said APPROVED, truth DENIED (visa=TRANSIT-7 flags=none fee=waived sponsor=SPN-4146)"
+confident,MIB-000115_p1,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-9090)"
+confident,MIB-000115_p2,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-9090)"
+confident,MIB-000115_p3,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-9090)"
+confident,MIB-000115_p4,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-9090)"
+confident,MIB-000115_p5,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-9090)"
+confident,MIB-000152_p1,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=waived sponsor=SPN-2729)"
+confident,MIB-000152_p2,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=waived sponsor=SPN-2729)"
+confident,MIB-000152_p3,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=waived sponsor=SPN-2729)"
+confident,MIB-000152_p4,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=waived sponsor=SPN-2729)"
+confident,MIB-000152_p5,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=waived sponsor=SPN-2729)"
+confident,MIB-000167_p1,0.83,"said DENIED, truth NEEDS_REVIEW (visa=MED-3 flags=rescinded_denial fee=paid sponsor=SPN-7675)"
+confident,MIB-000167_p2,0.83,"said DENIED, truth NEEDS_REVIEW (visa=MED-3 flags=rescinded_denial fee=paid sponsor=SPN-7675)"
+confident,MIB-000167_p3,0.83,"said DENIED, truth NEEDS_REVIEW (visa=MED-3 flags=rescinded_denial fee=paid sponsor=SPN-7675)"
+confident,MIB-000167_p4,0.83,"said DENIED, truth NEEDS_REVIEW (visa=MED-3 flags=rescinded_denial fee=paid sponsor=SPN-7675)"
+confident,MIB-000283_p1,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-2651)"
+confident,MIB-000283_p2,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-2651)"
+confident,MIB-000283_p3,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-2651)"
+confident,MIB-000283_p4,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-2651)"
+confident,MIB-000335_p1,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=paid sponsor=SPN-8351)"
+confident,MIB-000335_p2,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=paid sponsor=SPN-8351)"
+confident,MIB-000335_p3,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=paid sponsor=SPN-8351)"
+confident,MIB-000335_p4,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=paid sponsor=SPN-8351)"
+confident,MIB-000335_p5,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=XW-2 flags=none fee=paid sponsor=SPN-8351)"
+confident,MIB-000351_p1,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-7152)"
+confident,MIB-000351_p2,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-7152)"
+confident,MIB-000351_p3,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-7152)"
+confident,MIB-000351_p4,0.87,"said NEEDS_REVIEW, truth DENIED (visa=MED-3 flags=illegible_biometrics fee=paid sponsor=SPN-7152)"
+confident,MIB-000442_p1,0.94,"said DENIED, truth APPROVED (visa=XW-1 flags=none fee=waived sponsor=SPN-3689)"
+confident,MIB-000442_p2,0.94,"said DENIED, truth APPROVED (visa=XW-1 flags=none fee=waived sponsor=SPN-3689)"
+confident,MIB-000442_p3,0.94,"said DENIED, truth APPROVED (visa=XW-1 flags=none fee=waived sponsor=SPN-3689)"
+confident,MIB-000457_p1,0.83,"said DENIED, truth NEEDS_REVIEW (visa=XW-2 flags=rescinded_denial fee=waived sponsor=SPN-6337)"
+confident,MIB-000457_p2,0.83,"said DENIED, truth NEEDS_REVIEW (visa=XW-2 flags=rescinded_denial fee=waived sponsor=SPN-6337)"
+confident,MIB-000457_p3,0.83,"said DENIED, truth NEEDS_REVIEW (visa=XW-2 flags=rescinded_denial fee=waived sponsor=SPN-6337)"
+confident,MIB-000487_p1,0.71,"said NEEDS_REVIEW, truth APPROVED (visa=MED-3 flags=none fee=paid sponsor=SPN-1305)"
+confident,MIB-000487_p2,0.71,"said NEEDS_REVIEW, truth APPROVED (visa=MED-3 flags=none fee=paid sponsor=SPN-1305)"
+confident,MIB-000487_p3,0.71,"said NEEDS_REVIEW, truth APPROVED (visa=MED-3 flags=none fee=paid sponsor=SPN-1305)"
+confident,MIB-000487_p4,0.71,"said NEEDS_REVIEW, truth APPROVED (visa=MED-3 flags=none fee=paid sponsor=SPN-1305)"
+confident,MIB-000487_p5,0.71,"said NEEDS_REVIEW, truth APPROVED (visa=MED-3 flags=none fee=paid sponsor=SPN-1305)"
+confident,MIB-000510_p1,0.78,"said NEEDS_REVIEW, truth APPROVED (visa=DIP-1 flags=none fee=paid sponsor=SPN-8804)"
+confident,MIB-000510_p2,0.78,"said NEEDS_REVIEW, truth APPROVED (visa=DIP-1 flags=none fee=paid sponsor=SPN-8804)"
+confident,MIB-000510_p3,0.78,"said NEEDS_REVIEW, truth APPROVED (visa=DIP-1 flags=none fee=paid sponsor=SPN-8804)"
+confident,MIB-000510_p4,0.78,"said NEEDS_REVIEW, truth APPROVED (visa=DIP-1 flags=none fee=paid sponsor=SPN-8804)"
+confident,MIB-000510_p5,0.78,"said NEEDS_REVIEW, truth APPROVED (visa=DIP-1 flags=none fee=paid sponsor=SPN-8804)"
+confident,MIB-000533_p1,0.83,"said DENIED, truth NEEDS_REVIEW (visa=XW-1 flags=illegible_biometrics fee=paid sponsor=SPN-1539)"
+confident,MIB-000533_p2,0.83,"said DENIED, truth NEEDS_REVIEW (visa=XW-1 flags=illegible_biometrics fee=paid sponsor=SPN-1539)"
+confident,MIB-000533_p3,0.83,"said DENIED, truth NEEDS_REVIEW (visa=XW-1 flags=illegible_biometrics fee=paid sponsor=SPN-1539)"
+confident,MIB-000555_p1,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=none fee=waived sponsor=SPN-2303)"
+confident,MIB-000555_p2,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=none fee=waived sponsor=SPN-2303)"
+confident,MIB-000555_p3,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=none fee=waived sponsor=SPN-2303)"
+confident,MIB-000555_p4,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=none fee=waived sponsor=SPN-2303)"
+confident,MIB-000555_p5,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=none fee=waived sponsor=SPN-2303)"
+confident,MIB-000577_p1,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=paid sponsor=SPN-3785)"
+confident,MIB-000577_p2,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=paid sponsor=SPN-3785)"
+confident,MIB-000577_p3,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=paid sponsor=SPN-3785)"
+confident,MIB-000577_p4,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=paid sponsor=SPN-3785)"
+confident,MIB-000577_p5,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=paid sponsor=SPN-3785)"
+confident,MIB-000656_p1,0.77,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-3085)"
+confident,MIB-000656_p2,0.77,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-3085)"
+confident,MIB-000656_p3,0.77,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-3085)"
+confident,MIB-000656_p4,0.77,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-3085)"
+confident,MIB-000656_p5,0.77,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-3085)"
+confident,MIB-000656_p6,0.77,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-3085)"
+confident,MIB-000687_p1,0.83,"said DENIED, truth APPROVED (visa=DIP-1 flags=none fee=waived sponsor=SPN-1319)"
+confident,MIB-000687_p2,0.83,"said DENIED, truth APPROVED (visa=DIP-1 flags=none fee=waived sponsor=SPN-1319)"
+confident,MIB-000687_p3,0.83,"said DENIED, truth APPROVED (visa=DIP-1 flags=none fee=waived sponsor=SPN-1319)"
+confident,MIB-000687_p4,0.83,"said DENIED, truth APPROVED (visa=DIP-1 flags=none fee=waived sponsor=SPN-1319)"
+confident,MIB-000746_p1,0.87,"said NEEDS_REVIEW, truth DENIED (visa=XW-1 flags=sponsor_mismatch fee=paid sponsor=SPN-1774)"
+confident,MIB-000746_p2,0.87,"said NEEDS_REVIEW, truth DENIED (visa=XW-1 flags=sponsor_mismatch fee=paid sponsor=SPN-1774)"
+confident,MIB-000746_p3,0.87,"said NEEDS_REVIEW, truth DENIED (visa=XW-1 flags=sponsor_mismatch fee=paid sponsor=SPN-1774)"
+confident,MIB-000901_p1,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=illegible_biometrics fee=waived sponsor=SPN-3326)"
+confident,MIB-000901_p2,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=illegible_biometrics fee=waived sponsor=SPN-3326)"
+confident,MIB-000901_p3,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=illegible_biometrics fee=waived sponsor=SPN-3326)"
+confident,MIB-000901_p4,0.83,"said APPROVED, truth NEEDS_REVIEW (visa=MED-3 flags=illegible_biometrics fee=waived sponsor=SPN-3326)"
+confident,MIB-000931_p1,0.91,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-2703)"
+confident,MIB-000931_p2,0.91,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-2703)"
+confident,MIB-000931_p3,0.91,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-2703)"
+confident,MIB-000931_p4,0.91,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-2703)"
+confident,MIB-000931_p5,0.91,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-2703)"
+confident,MIB-000931_p6,0.91,"said DENIED, truth NEEDS_REVIEW (visa=DIP-1 flags=illegible_biometrics fee=waived sponsor=SPN-2703)"
+unreadable,MIB-000008_p1,,OCR recovered 0 body chars
+unreadable,MIB-000011_p5,,OCR recovered 0 body chars
+unreadable,MIB-000014_p1,,OCR recovered 13 body chars
+unreadable,MIB-000018_p2,,OCR recovered 7 body chars
+unreadable,MIB-000019_p3,,OCR recovered 23 body chars
+unreadable,MIB-000022_p4,,OCR recovered 0 body chars
+unreadable,MIB-000023_p2,,OCR recovered 20 body chars
+unreadable,MIB-000024_p2,,OCR recovered 0 body chars
+unreadable,MIB-000025_p2,,OCR recovered 0 body chars
+unreadable,MIB-000025_p5,,OCR recovered 0 body chars
+unreadable,MIB-000028_p2,,OCR recovered 3 body chars
+unreadable,MIB-000030_p2,,OCR recovered 0 body chars
+unreadable,MIB-000030_p4,,OCR recovered 3 body chars
+unreadable,MIB-000034_p1,,OCR recovered 4 body chars
+unreadable,MIB-000035_p5,,OCR recovered 23 body chars
+unreadable,MIB-000038_p1,,OCR recovered 0 body chars
+unreadable,MIB-000039_p2,,OCR recovered 23 body chars
+unreadable,MIB-000045_p1,,OCR recovered 16 body chars
+unreadable,MIB-000046_p1,,OCR recovered 0 body chars
+unreadable,MIB-000046_p6,,OCR recovered 17 body chars
+unreadable,MIB-000049_p3,,OCR recovered 0 body chars
+unreadable,MIB-000051_p4,,OCR recovered 24 body chars
+unreadable,MIB-000055_p2,,OCR recovered 20 body chars
+unreadable,MIB-000059_p2,,OCR recovered 0 body chars
+unreadable,MIB-000061_p1,,OCR recovered 2 body chars

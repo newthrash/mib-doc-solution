@@ -28,7 +28,17 @@ _CONFUSABLE = {
     ("2", "Z"), ("5", "S"), ("6", "G"), ("8", "B"), ("7", "T"), ("4", "A"),
     ("C", "G"), ("E", "F"), ("I", "L"), ("K", "X"), ("M", "N"), ("O", "Q"),
     ("P", "R"), ("U", "V"), ("V", "Y"), ("W", "V"), ("H", "N"), ("R", "B"),
+    ("S", "V"),  # measured: "Case" read as "Cave"
 }
+
+# Merges where two adjacent glyphs fuse into one, which a per-character edit
+# distance cannot express at any substitution cost: "Arrival" reads as
+# "Amval" because rr closes into m. Scored as a single cheap operation.
+_LIGATURES = {
+    ("RR", "M"), ("NI", "M"), ("RI", "N"), ("VV", "W"), ("CL", "D"),
+    ("LI", "U"), ("IN", "M"), ("NN", "M"),
+}
+_LIGATURE_COST = 0.45
 _CONFUSABLE_COST = 0.35
 _CASE_COST = 0.0
 
@@ -66,6 +76,11 @@ def weighted_distance(a: str, b: str) -> float:
                 and a[i - 2].upper() == b[j - 1].upper()
             ):
                 current[j] = min(current[j], previous2[j - 2] + 0.7)  # transposition
+            # Two glyphs in `a` fused into one in `b`, or the reverse.
+            if i > 1 and (a[i - 2:i].upper(), b[j - 1].upper()) in _LIGATURES:
+                current[j] = min(current[j], previous2[j - 1] + _LIGATURE_COST)
+            if j > 1 and (b[j - 2:j].upper(), a[i - 1].upper()) in _LIGATURES:
+                current[j] = min(current[j], previous[j - 2] + _LIGATURE_COST)
         previous2, previous = previous, current
     return previous[-1]
 
@@ -140,12 +155,17 @@ def snap_visa(value: str) -> str | None:
         prefix, digit = loose.group(1), loose.group(2)
         if digit in _DIGIT_UNIQUE:
             # Guard against a prefix that clearly belongs to another class,
-            # which would mean the digit itself was misread.
+            # which would mean the digit itself was misread. Compare PREFIXES,
+            # not whole entries: XW-1 and XW-2 share a prefix, so matching on
+            # the entry made the winner depend on iteration order and rejected
+            # a correct read whenever the tie fell the wrong way.
+            expected_prefix = _DIGIT_UNIQUE[digit].split("-")[0]
+            prefixes = {entry.split("-")[0] for entry in VISA_CLASSES}
             best = min(
-                (weighted_distance(prefix, entry.split("-")[0]) / len(entry.split("-")[0]), entry)
-                for entry in VISA_CLASSES
+                (weighted_distance(prefix, candidate) / len(candidate), candidate)
+                for candidate in prefixes
             )
-            if best[1] == _DIGIT_UNIQUE[digit] or best[0] > 0.5:
+            if best[1] == expected_prefix or best[0] > 0.5:
                 return _DIGIT_UNIQUE[digit]
             return None
         scored = sorted(

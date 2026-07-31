@@ -44,6 +44,7 @@ class Record:
     arrival_date_untrusted: bool = False  # date present only in hidden text
     fee_explicit_unknown: bool = False    # receipt *prints* unknown (vs unread)
     injection_detected: bool = False      # hidden instructions seen in packet
+    documented_damage: bool = False       # packet marks a field destroyed inline
     risk_flags_known: bool = True         # did we actually read risk evidence?
     has_scanned_pages: bool = False       # raster pages present in the packet
     sponsor_revoked_in_corpus: bool = False  # frequency-outlier sponsor id
