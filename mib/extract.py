@@ -396,11 +396,15 @@ def extract_record(packet: Packet) -> Record:
 
     flags, flags_seen = _extract_flags(all_lines, full_text)
     if not flags_seen and "risk_flags" in roi:
-        roi_flags, roi_seen = _extract_flags(
-            [f"Observed flags: {roi['risk_flags']}"], roi["risk_flags"]
-        )
-        if roi_seen:
-            flags, flags_seen = roi_flags, True
+        raw_roi = roi["risk_flags"]
+        if raw_roi.strip().lower() == "none":
+            flags, flags_seen = frozenset(), True
+        else:
+            roi_flags, roi_seen = _extract_flags(
+                [f"Observed flags: {raw_roi}"], raw_roi
+            )
+            if roi_seen:
+                flags, flags_seen = roi_flags, True
     record.risk_flags = flags
     record.risk_flags_known = flags_seen
 

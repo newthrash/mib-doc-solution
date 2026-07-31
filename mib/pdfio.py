@@ -450,7 +450,7 @@ def _recover_cells(document: "pymupdf.Document", packet: Packet) -> None:
             try:
                 value = read_value(page, field_name, boxes, dpi=600)
             except Exception:  # noqa: BLE001
-                continue
+                value = None
             if value:
                 packet.roi_values[field_name] = value
                 wanted.remove(field_name)
@@ -471,3 +471,4 @@ def _label_present(text: str, field_name: str) -> bool:
     hint = _ROI_LABEL_HINTS[field_name]
     normalized = re.sub(r"[^a-z ]+", " ", text.lower())
     return hint in re.sub(r"\s+", " ", normalized)
+

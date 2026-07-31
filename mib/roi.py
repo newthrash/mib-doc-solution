@@ -155,3 +155,92 @@ def read_value(
     text, _ = _tesseract(crop, psm=7, allowlist=ALLOWLISTS.get(field))
     text = text.strip()
     return text or None
+
+
+# --- Constrained recognition: correlation against rendered candidates -------
+#
+# The corpus's raster pages embed low-DPI JPEGs whose strokes are ~3x too
+# thick for their glyph size: counters fill in and adjacent glyphs merge into
+# word-shaped blobs. Segment-then-classify OCR has nothing to segment at any
+# resolution. But every damaged field is closed-vocabulary, so recognition can
+# be constrained: render each candidate in the form's face, degrade it the
+# same way (dilate to match the stroke bloat), correlate against the cell, and
+# accept only a clear winner of plausible width. Measured on fee cells OCR had
+# failed entirely: 8/40 recovered, 0 wrong, 32 refused.
+
+_CORR_MARGIN = 0.08
+_WIDTH_RATIO = (0.65, 1.45)
+
+
+def _render_candidate(text: str, height: int, dilate: int) -> "np.ndarray | None":
+    scale = height / 22.0
+    doc = pymupdf.open()
+    page = doc.new_page(width=420, height=40)
+    page.insert_text((4, 26), text, fontsize=18, fontname="helv")
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), colorspace=pymupdf.csGRAY)
+    img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width)
+    doc.close()
+    cols = np.where((img < 128).any(axis=0))[0]
+    rows = np.where((img < 128).any(axis=1))[0]
+    if not len(cols) or not len(rows):
+        return None
+    img = img[rows[0]:rows[-1] + 1, cols[0]:cols[-1] + 1]
+    import cv2
+
+    inked = cv2.dilate(255 - img, np.ones((3, 3), np.uint8), iterations=dilate)
+    return cv2.GaussianBlur(255 - inked, (3, 3), 0)
+
+
+def correlate_value(page: pymupdf.Page, field: str, boxes, candidates) -> str | None:
+    """Pick the candidate whose degraded rendering best matches the cell.
+
+    Refuses unless the winner clears the runner-up by a margin AND its width
+    is plausible for the cell's ink - a short template can correlate well
+    inside a longer blob, so shape alone is not enough.
+    """
+    import cv2
+
+    label = find_label(boxes, field)
+    if label is None:
+        return None
+    _, y0, x1, y1 = label
+    cell_rect = pymupdf.Rect(
+        x1 + _GAP, y0 - _LINE_PAD, x1 + _GAP + _VALUE_W, y1 + _LINE_PAD
+    ) & page.rect
+    if cell_rect.is_empty:
+        return None
+    pix = page.get_pixmap(dpi=400, colorspace=pymupdf.csGRAY, clip=cell_rect)
+    if pix.width < 12 or pix.height < 12:
+        return None
+    cell = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width)
+    cell = cv2.normalize(cell, None, 0, 255, cv2.NORM_MINMAX)
+
+    ink_rows = np.where((cell < 150).any(axis=1))[0]
+    ink_cols = np.where((cell < 150).any(axis=0))[0]
+    if len(ink_rows) < 6 or len(ink_cols) < 6:
+        return None
+    height = ink_rows[-1] - ink_rows[0] + 1
+    ink_width = ink_cols[-1] - ink_cols[0] + 1
+
+    scores: dict[str, float] = {}
+    for candidate in candidates:
+        best = -1.0
+        for dilate in (1, 2):
+            template = _render_candidate(candidate, height, dilate)
+            if (
+                template is None
+                or template.shape[0] > cell.shape[0]
+                or template.shape[1] > cell.shape[1]
+            ):
+                continue
+            ratio = template.shape[1] / max(1, ink_width)
+            if not (_WIDTH_RATIO[0] <= ratio <= _WIDTH_RATIO[1]):
+                continue
+            best = max(best, float(cv2.matchTemplate(cell, template, cv2.TM_CCOEFF_NORMED).max()))
+        scores[candidate] = best
+    ranked = sorted(scores.items(), key=lambda item: -item[1])
+    if len(ranked) < 2 or ranked[0][1] < 0.2:
+        return None
+    if ranked[0][1] - ranked[1][1] < _CORR_MARGIN:
+        return None
+    return ranked[0][0]
