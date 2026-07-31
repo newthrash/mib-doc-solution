@@ -17,7 +17,7 @@
   "fitted_on": "extracted_records",
   "folds": 5,
   "min_path_support": 8,
-  "oof_total_estimate": 117.98260493984733,
+  "oof_total_estimate": 118.06932690624163,
   "paths": {
     "adjudicator_conflict": {
       "APPROVED": 0.16666666666666666,
@@ -74,20 +74,25 @@
       "DENIED": 0.010869565217391304,
       "NEEDS_REVIEW": 0.9782608695652174
     },
+    "registry_embargo": {
+      "APPROVED": 0.07692307692307693,
+      "DENIED": 0.7692307692307693,
+      "NEEDS_REVIEW": 0.15384615384615385
+    },
     "review_flags": {
-      "APPROVED": 0.020833333333333332,
-      "DENIED": 0.125,
-      "NEEDS_REVIEW": 0.8541666666666666
+      "APPROVED": 0.02127659574468085,
+      "DENIED": 0.1276595744680851,
+      "NEEDS_REVIEW": 0.851063829787234
     },
     "risk_page_absent": {
-      "APPROVED": 0.5871559633027523,
-      "DENIED": 0.14678899082568808,
-      "NEEDS_REVIEW": 0.26605504587155965
+      "APPROVED": 0.5925925925925926,
+      "DENIED": 0.1388888888888889,
+      "NEEDS_REVIEW": 0.26851851851851855
     },
     "risk_page_unreadable": {
-      "APPROVED": 0.3974358974358974,
-      "DENIED": 0.20512820512820512,
-      "NEEDS_REVIEW": 0.3974358974358974
+      "APPROVED": 0.4025974025974026,
+      "DENIED": 0.19480519480519481,
+      "NEEDS_REVIEW": 0.4025974025974026
     },
     "risk_page_unreadable_med": {
       "APPROVED": 0.5,
@@ -115,9 +120,9 @@
       "NEEDS_REVIEW": 0.11764705882352941
     },
     "visa_unknown": {
-      "APPROVED": 0.375,
-      "DENIED": 0.35,
-      "NEEDS_REVIEW": 0.275
+      "APPROVED": 0.38461538461538464,
+      "DENIED": 0.3333333333333333,
+      "NEEDS_REVIEW": 0.28205128205128205
     }
   }
 }

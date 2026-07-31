@@ -140,12 +140,12 @@ def decision_path(record: Record) -> str:
     # and is deliberately secondary because it cannot cover unseen worlds.
     # "CLEAR" is not treated as evidence of cleanliness - it accompanies
     # approvals only 35% of the time and must not license an approval.
-    if (
-        record.registry_status
-        and "EMBARGO" in record.registry_status
-        and visa_known
-        and record.visa_class != "DIP-1"
-    ):
+    # No DIP-1 exemption here: the diplomatic class waives the SPONSOR
+    # requirement, not the embargo - planetary_embargo is a disqualifying flag
+    # for every class, and the one DIP-1 packet with a read EMBARGO REVIEW
+    # status is denied in truth. Every read EMBARGO REVIEW in the corpus is
+    # denied or review, none approved.
+    if record.registry_status and "EMBARGO" in record.registry_status:
         return "registry_embargo"
     if (
         record.home_world in EMBARGOED_HOME_WORLDS

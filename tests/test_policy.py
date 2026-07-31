@@ -121,12 +121,18 @@ class TransferSafety(unittest.TestCase):
         )
         self.assertEqual(decision_path(record), "registry_embargo")
 
-    def test_diplomatic_exemption_survives(self):
+    def test_embargo_applies_to_diplomats_too(self):
+        """DIP-1 waives the sponsor requirement, not the embargo.
+
+        planetary_embargo is a disqualifying flag for every visa class, and
+        the corpus's one DIP-1 packet with a read EMBARGO REVIEW status is
+        denied in truth.
+        """
         record = Record(
             case_id="MIB-000001", visa_class="DIP-1",
             home_world="Some-Unseen-World", registry_status="EMBARGO REVIEW",
         )
-        self.assertNotEqual(decision_path(record), "registry_embargo")
+        self.assertEqual(decision_path(record), "registry_embargo")
 
     def test_clear_status_does_not_license_approval(self):
         """CLEAR accompanies approvals only 35% of the time; it is not proof."""
