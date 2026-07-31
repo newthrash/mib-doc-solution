@@ -21,3 +21,6 @@ predictions.jsonl
 evaluation.json
 case_scores.jsonl
 cache/
+
+# Derived page exports for inspection - large, regenerable, never committed.
+bad/
