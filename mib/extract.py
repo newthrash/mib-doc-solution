@@ -18,6 +18,7 @@ from .lexicon import (
     snap_name,
     snap_name_token,
     snap_flag,
+    split_fused,
     repair_sponsor_id,
     snap_home_world,
     snap_purpose,
@@ -424,6 +425,18 @@ def extract_record(packet: Packet) -> Record:
                     (value, page.kind)
                     for value in _labeled_values(page_rapid, labels, collapsed=True)
                 )
+
+    # Tokens where OCR lost the space between label and value are unreadable
+    # by any per-field parser, so they are decoded before field resolution and
+    # merged in as ordinary candidates from their own page.
+    for page in packet.pages:
+        for line in (page.text + "\n" + (page.rapid_text or "")).splitlines():
+            for token in line.split():
+                if len(token) < 8:
+                    continue
+                decoded = split_fused(token)
+                if decoded:
+                    raw[decoded[0]].append((decoded[1], page.kind))
 
     record.applicant_name = _consensus(raw["applicant_name"], _parse_name) or UNKNOWN
     record.species_code = _consensus(raw["species_code"], snap_species) or UNKNOWN

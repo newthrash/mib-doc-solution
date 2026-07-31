@@ -373,3 +373,75 @@ def snap_name(value: str) -> str | None:
         snapped = snap_name_token(part)
         repaired.append(snapped if snapped else part)
     return " ".join(repaired)
+
+
+# --- Fused label+value tokens ----------------------------------------------
+#
+# Degraded OCR drops the space between a label and its value, emitting one
+# token: 'Sistusiwoved' for 'Status: waived'. Matching that against a word
+# bank fails at any tolerance, because it is not one corrupted word but two
+# fused ones. Splitting first is what makes it recoverable - and once the head
+# identifies the field, the value vocabulary collapses to a handful of
+# candidates, so the tail can be matched far more loosely than a free-text
+# match could ever allow.
+
+_FUSED_LABELS = {
+    "fee_status": ("FeeStatus", "Status"),
+    "visa_class": ("VisaClass", "Class"),
+    "species_code": ("SpeciesCode", "Species"),
+    "home_world": ("HomeWorld", "World"),
+    "declared_purpose": ("DeclaredPurpose", "Purpose"),
+    "risk_flags": ("ObservedFlags", "Flags"),
+}
+
+_FUSED_LABEL_TOL = 0.34
+_FUSED_VALUE_TOL = 0.55   # safe only because the label fixes the vocabulary
+_FUSED_MARGIN = 0.15
+
+
+def _relative(observed: str, target: str) -> float:
+    return weighted_distance(observed.upper(), target.upper()) / max(1, len(target))
+
+
+def split_fused(token: str) -> tuple[str, str] | None:
+    """Recover (field, value) from a token whose label and value ran together.
+
+    Returns None unless some split gives a plausible label AND a value that
+    beats its runner-up - a fused token must not be allowed to pick between
+    two equally poor candidates.
+    """
+    from .constants import (
+        FEE_VALUES, HOME_WORLDS, PURPOSES, RISK_FLAGS, SPECIES_CODES, VISA_CLASSES,
+    )
+
+    vocabularies = {
+        "fee_status": tuple(FEE_VALUES),
+        "visa_class": tuple(VISA_CLASSES),
+        "species_code": tuple(SPECIES_CODES),
+        "home_world": tuple(HOME_WORLDS),
+        "declared_purpose": tuple(PURPOSES),
+        "risk_flags": ("none",) + tuple(RISK_FLAGS),
+    }
+    cleaned = "".join(ch for ch in token if ch.isalnum())
+    if len(cleaned) < 7:
+        return None
+
+    best = None
+    for cut in range(3, len(cleaned) - 2):
+        head, tail = cleaned[:cut], cleaned[cut:]
+        for field, names in _FUSED_LABELS.items():
+            label_distance = min(_relative(head, name) for name in names)
+            if label_distance > _FUSED_LABEL_TOL:
+                continue
+            scored = sorted(
+                (_relative(tail, value), value) for value in vocabularies[field]
+            )
+            value_distance, value = scored[0]
+            if value_distance > _FUSED_VALUE_TOL:
+                continue
+            if len(scored) > 1 and scored[1][0] - value_distance < _FUSED_MARGIN:
+                continue
+            total = label_distance + value_distance
+            if best is None or total < best[0]:
+                best = (total, field, value)
+    return (best[1], best[2]) if best else None
