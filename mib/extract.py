@@ -147,7 +147,33 @@ def _fuzzy_label_prefix(stripped: str, label: str) -> str | None:
     return " ".join(line_words[len(label_words):]).lstrip(" :.|-\t")
 
 
-def _labeled_values(lines: list[str], labels: tuple[str, ...]) -> list[str]:
+def _collapsed_label_prefix(stripped: str, label: str) -> str | None:
+    """Match a label whose interior spaces OCR dropped ('FeeStatus:paid').
+
+    The second OCR engine frequently omits spaces, leaving label and value
+    fused in one token. Compare against the space-collapsed label with the
+    same per-character tolerance used elsewhere.
+    """
+    from .lexicon import weighted_distance
+
+    collapsed = label.replace(" ", "")
+    head = re.sub(r"[^A-Za-z]", "", stripped[: len(collapsed) + 2])[: len(collapsed)]
+    if len(head) < len(collapsed) - 1:
+        return None
+    if weighted_distance(head.upper(), collapsed) / len(collapsed) > 0.25:
+        return None
+    index = 0
+    matched = 0
+    while index < len(stripped) and matched < len(collapsed):
+        if stripped[index].isalpha():
+            matched += 1
+        index += 1
+    return stripped[index:].lstrip(" :.|-\t")
+
+
+def _labeled_values(
+    lines: list[str], labels: tuple[str, ...], *, collapsed: bool = False
+) -> list[str]:
     """Collect values for `labels` in both packet layouts.
 
     Layout A (native form text): the label occupies its own line and the value
@@ -155,6 +181,12 @@ def _labeled_values(lines: list[str], labels: tuple[str, ...]) -> list[str]:
     value share a line, separated by a colon. Labels are matched exactly first
     and fuzzily second, so damaged labels ('Sponser ID', 'Visa Cisse') no
     longer strand intact values.
+
+    `collapsed` additionally matches labels whose interior spaces were dropped
+    ('FeeStatus:paid'). That is a second-engine artifact, and enabling it on
+    ordinary OCR lines measurably polluted open fields - a noise line starting
+    with a label word yields a garbled candidate that vocabulary repair then
+    turns into a wrong-but-valid value - so it is opt-in for the rapid pass.
     """
     values: list[str] = []
     for index, line in enumerate(lines):
@@ -175,6 +207,8 @@ def _labeled_values(lines: list[str], labels: tuple[str, ...]) -> list[str]:
                     values.append(remainder)
                 break
             remainder = _fuzzy_label_prefix(stripped, label)
+            if remainder is None and collapsed:
+                remainder = _collapsed_label_prefix(stripped, label)
             if remainder is not None:
                 if remainder and not _is_noise(remainder):
                     values.append(remainder)
@@ -333,13 +367,28 @@ def extract_record(packet: Packet) -> Record:
     # Candidates keep the page type they came from so precedence can be
     # applied; a bare list of strings cannot express that a value came from a
     # decoy fragment rather than the intake form.
+    #
+    # Second-engine lines feed only closed-vocabulary fields, where snapping
+    # filters noise. Open-form fields (names, sponsor digits, dates) are
+    # excluded: a garbled read there snaps into a wrong-but-valid value, which
+    # measured as a doubling of wrong applicant names before this split.
+    _CLOSED = {"species_code", "home_world", "visa_class", "declared_purpose",
+               "fee_status", "risk_flags"}
     raw: dict[str, list[tuple[str, str]]] = {field: [] for field in _LABELS}
+    rapid_lines: list[str] = []
     for page in packet.pages:
         page_lines = page.text.splitlines()
+        page_rapid = page.rapid_text.splitlines() if page.rapid_text else []
+        rapid_lines.extend(page_rapid)
         for field, labels in _LABELS.items():
             raw[field].extend(
                 (value, page.kind) for value in _labeled_values(page_lines, labels)
             )
+            if page_rapid and field in _CLOSED:
+                raw[field].extend(
+                    (value, page.kind)
+                    for value in _labeled_values(page_rapid, labels, collapsed=True)
+                )
 
     record.applicant_name = _consensus(raw["applicant_name"], _parse_name) or UNKNOWN
     record.species_code = _consensus(raw["species_code"], snap_species) or UNKNOWN
@@ -394,7 +443,7 @@ def extract_record(packet: Packet) -> Record:
     if record.home_world == UNKNOWN and "home_world" in roi:
         record.home_world = snap_home_world(roi["home_world"]) or UNKNOWN
 
-    flags, flags_seen = _extract_flags(all_lines, full_text)
+    flags, flags_seen = _extract_flags(all_lines + rapid_lines, full_text)
     if not flags_seen and "risk_flags" in roi:
         raw_roi = roi["risk_flags"]
         if raw_roi.strip().lower() == "none":
@@ -414,7 +463,8 @@ def extract_record(packet: Packet) -> Record:
     record.has_diplomatic_note = bool(
         re.search(r"DIPLOMATIC\s+NOTE", full_text, re.IGNORECASE)
     )
-    if match := _REGISTRY_STATUS_RE.search(full_text):
+    rapid_blob = "\n".join(rapid_lines)
+    if match := _REGISTRY_STATUS_RE.search(full_text + "\n" + rapid_blob):
         record.registry_status = " ".join(match.group(1).split()).upper()
     if match := _RECEIPT_RE.search(full_text):
         record.receipt_date = match.group(1)

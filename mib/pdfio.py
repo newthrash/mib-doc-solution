@@ -36,6 +36,32 @@ UNTRUSTED_RE = re.compile(
 # reuse the recognition the page pass already paid for.
 _LAST_BOXES: list = []
 
+# Second OCR engine, loaded lazily once per process. PP-OCR's recognizer is a
+# CNN over the whole text line - no character segmentation - which is the
+# architecture the corpus's merged-glyph rasters defeat in Tesseract. It runs
+# offline from models bundled in the wheel.
+_RAPID_ENGINE = None
+
+
+def _rapidocr():
+    global _RAPID_ENGINE
+    if _RAPID_ENGINE is None:
+        from rapidocr_onnxruntime import RapidOCR
+
+        _RAPID_ENGINE = RapidOCR()
+    return _RAPID_ENGINE
+
+
+def _rapid_ocr_text(gray: np.ndarray) -> str:
+    try:
+        result, _ = _rapidocr()(np.stack([gray] * 3, axis=-1))
+    except Exception:  # noqa: BLE001
+        return ""
+    if not result:
+        return ""
+    return "\n".join(text for _, text, conf in result if float(conf) > 0.4)
+
+
 _MIN_FONT_SIZE = 4.5
 _MIN_CONTRAST = 28.0
 _MIN_CROP_OVERLAP = 0.75
@@ -46,6 +72,10 @@ class Page:
     number: int
     boxes: list = field(default_factory=list)   # word boxes, PDF points
     box_dpi: int = 220
+    # Second-engine text, kept out of Page.text: its noisy reads of open-form
+    # values (names, sponsor digits, dates) snap into wrong-but-valid strings,
+    # so only closed-vocabulary parsers may consume it.
+    rapid_text: str = ""
     kind: str = "unknown"
     visible_native: str = ""
     hidden_native: str = ""
@@ -318,6 +348,20 @@ def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float, list, int]
             if _anchor_count(best[0]) >= 2:
                 break
 
+    # Second engine: Tesseract segments characters before classifying, and the
+    # corpus's low-DPI rasters merge adjacent glyphs into blobs that defeat
+    # segmentation entirely. PP-OCR recognizes the whole line with a CNN and
+    # reads many of these pages. Fired when Tesseract recovered little - or
+    # when a biometric page lost its flags line specifically, since that line
+    # decides whether a risk panel was read at all.
+    rapid_text = ""
+    normalized_best = re.sub(r"[^A-Z]+", " ", best[0].upper())
+    lost_flags_line = (
+        "BIOMETRIC" in normalized_best and "FLAG" not in normalized_best
+    )
+    if _anchor_count(best[0]) < 2 or lost_flags_line:
+        rapid_text = _rapid_ocr_text(render_gray(page, dpi=260))
+
     # Rotated scans: PDF metadata says upright but the raster is turned.
     if _anchor_count(best[0]) < 1 and len(re.sub(r"\W", "", best[0])) < 100:
         for turns in (1, 3, 2):
@@ -328,7 +372,7 @@ def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float, list, int]
                 best, best_boxes, best_dpi = candidate, [], dpi
             if _anchor_count(best[0]) >= 2:
                 break
-    return best[0], best[1], best_boxes, best_dpi
+    return best[0], best[1], best_boxes, best_dpi, rapid_text
 
 
 def classify_page(text: str) -> str:
@@ -375,13 +419,14 @@ def load_packet(pdf_path: str, dpi: int = 220) -> Packet:
                 # scan. Measure only the body.
                 is_scanned = len(_FOOTER_RE.sub("", visible).strip()) < 40
                 try:
-                    ocr_text, ocr_confidence, page_boxes, box_dpi = ocr_page(
-                        page, dpi=dpi
-                    )
+                    (ocr_text, ocr_confidence, page_boxes, box_dpi,
+                     rapid_text) = ocr_page(page, dpi=dpi)
                     ocr_text, injected_ocr = scrub(ocr_text)
+                    rapid_text, injected_rapid = scrub(rapid_text)
+                    injected_ocr = injected_ocr or injected_rapid
                 except Exception:
                     injected_ocr = False
-                    page_boxes, box_dpi = [], dpi
+                    page_boxes, box_dpi, rapid_text = [], dpi, ""
                 packet.pages.append(
                     Page(
                         number=index + 1,
@@ -392,6 +437,7 @@ def load_packet(pdf_path: str, dpi: int = 220) -> Packet:
                         ocr_confidence=ocr_confidence,
                         boxes=page_boxes,
                         box_dpi=box_dpi,
+                        rapid_text=rapid_text,
                         is_scanned=is_scanned,
                         injection_seen=bool(hidden.strip()) or injected_visible
                         or injected_hidden or injected_ocr,
