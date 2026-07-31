@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mib.constants import PAYOFF  # noqa: E402
+from mib.resolver import feature_vector  # noqa: E402
 from mib.policy import (  # noqa: E402
     NO_APPROVAL_PATHS,
     OUTCOMES,
@@ -81,8 +82,12 @@ def fit_table(paths_and_truth) -> tuple[dict, dict]:
     return table, fallback
 
 
-def evaluate(records, labels, table, fallback, priors=None):
+def evaluate(records, labels, table, fallback, priors=None, resolver_probs=None):
+    """resolver_probs: case_id -> outcome distribution for hedge-pool packets,
+    from a model fitted WITHOUT those packets. Deny-or-review only, mirroring
+    the runtime."""
     priors = priors or {}
+    resolver_probs = resolver_probs or {}
     hits = Counter()
     classification_raw = 0.0
     correct = catastrophic = 0
@@ -96,9 +101,13 @@ def evaluate(records, labels, table, fallback, priors=None):
             continue
         scored += 1
         path = decision_path(record)
-        adjudication, confidence = decide(
-            table.get(path, fallback), allow_approval=path not in NO_APPROVAL_PATHS
-        )
+        learned = resolver_probs.get(record.case_id) if path in NO_APPROVAL_PATHS else None
+        if learned:
+            adjudication, confidence = decide(learned, allow_approval=False)
+        else:
+            adjudication, confidence = decide(
+                table.get(path, fallback), allow_approval=path not in NO_APPROVAL_PATHS
+            )
 
         row = {f: ("|".join(sorted(record.flag_set())) or "none")
                if f == "risk_flags" else str(getattr(record, f)) for f in FIELDS}
@@ -159,6 +168,22 @@ def main() -> int:
     for record in records:
         apply_corpus_context(record, reference, revoked)
 
+    # Hedge-pool resolver, fitted per fold so the OOF column stays honest.
+    import numpy as np
+    from tools.fit_resolver import fit_logistic, predict_probs
+
+    outcome_index = {o: i for i, o in enumerate(OUTCOMES)}
+    pool = [r for r in records if decision_path(r) in NO_APPROVAL_PATHS]
+    pool_X = np.array([feature_vector(r) for r in pool]) if pool else np.zeros((0, 1))
+    pool_y = np.array(
+        [outcome_index[labels[r.case_id]["adjudication"].strip()] for r in pool]
+    )
+    mu, sigma = (pool_X.mean(axis=0), pool_X.std(axis=0)) if len(pool) else (0, 1)
+    if len(pool):
+        sigma[sigma < 1e-9] = 1.0
+        pool_Xs = (pool_X - mu) / sigma
+    pool_index = {r.case_id: i for i, r in enumerate(pool)}
+
     # Out-of-fold: each record is scored by a table fitted without it.
     folds = args.folds
     oof_paths = []
@@ -168,12 +193,24 @@ def main() -> int:
         table, fallback = fit_table(
             (decision_path(r), labels[r.case_id]["adjudication"].strip()) for r in train
         )
-        oof_paths.append((held, table, fallback))
+        resolver_probs = {}
+        if len(pool):
+            train_ids = {r.case_id for r in train}
+            mask = np.array([r.case_id in train_ids for r in pool])
+            if mask.sum() >= 40 and (~mask).sum():
+                W, b = fit_logistic(pool_Xs[mask], pool_y[mask])
+                P = predict_probs(W, b, pool_Xs[~mask])
+                held_pool = [r for r in pool if r.case_id not in train_ids]
+                for r, probs in zip(held_pool, P):
+                    resolver_probs[r.case_id] = {
+                        o: float(probs[outcome_index[o]]) for o in OUTCOMES
+                    }
+        oof_paths.append((held, table, fallback, resolver_probs))
 
     aggregate = Counter()
     oof_total = 0.0
-    for held, table, fallback in oof_paths:
-        result = evaluate(held, labels, table, fallback, priors)
+    for held, table, fallback, resolver_probs in oof_paths:
+        result = evaluate(held, labels, table, fallback, priors, resolver_probs)
         oof_total += result["total"] * result["n"]
         aggregate["n"] += result["n"]
         aggregate["catastrophic"] += result["catastrophic"]
@@ -183,7 +220,14 @@ def main() -> int:
     table, fallback = fit_table(
         (decision_path(r), labels[r.case_id]["adjudication"].strip()) for r in records
     )
-    in_sample = evaluate(records, labels, table, fallback, priors)
+    # In-sample column: full-fit resolver, matching what ships.
+    full_probs = {}
+    if len(pool):
+        W, b = fit_logistic(pool_Xs, pool_y)
+        P = predict_probs(W, b, pool_Xs)
+        for r, probs in zip(pool, P):
+            full_probs[r.case_id] = {o: float(probs[outcome_index[o]]) for o in OUTCOMES}
+    in_sample = evaluate(records, labels, table, fallback, priors, full_probs)
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)

@@ -276,12 +276,25 @@ class Calibration:
             payload = json.load(f)
         self.paths: dict[str, dict[str, float]] = payload["paths"]
         self.fallback: dict[str, float] = payload["fallback"]
+        from .resolver import Resolver
+
+        self.resolver = Resolver()
 
     def probs(self, path: str) -> dict[str, float]:
         return self.paths.get(path, self.fallback)
 
     def adjudicate(self, record: Record) -> tuple[str, float, str]:
         path = decision_path(record)
+        if path in NO_APPROVAL_PATHS and self.resolver.available:
+            # The hedge pool: evidence gaps, all review by default. A learned
+            # model over evidence-quality features separates the hidden
+            # denials from the rest - and is consulted deny-or-review only,
+            # so it is structurally incapable of a catastrophic approval.
+            # Out of fold: +0.57 classification, 0 CFA.
+            learned = self.resolver.probs(record)
+            if learned:
+                adjudication, confidence = decide(learned, allow_approval=False)
+                return adjudication, confidence, path
         adjudication, confidence = decide(
             self.probs(path), allow_approval=path not in NO_APPROVAL_PATHS
         )
