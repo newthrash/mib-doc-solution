@@ -63,8 +63,11 @@ def fit_table(paths_and_truth) -> tuple[dict, dict]:
         counts[path][truth] += 1
         overall[truth] += 1
 
-    total = sum(overall.values()) + LAPLACE * len(OUTCOMES)
-    fallback = {o: (overall.get(o, 0) + LAPLACE) / total for o in OUTCOMES}
+    # The fallback governs paths too sparse to fit and states never seen in
+    # training. The empirical global mix expected-value-argmaxes to DENIED,
+    # which is the wrong default for an unnamed evidence state - an unknown
+    # situation is what NEEDS_REVIEW exists for. Hedge instead.
+    fallback = {"APPROVED": 0.2, "DENIED": 0.2, "NEEDS_REVIEW": 0.6}
 
     table = {}
     for path, outcome_counts in counts.items():

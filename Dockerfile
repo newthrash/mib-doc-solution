@@ -8,7 +8,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+# rapidocr-onnxruntime declares GUI opencv-python, whose import needs libGL -
+# absent from slim images. cv2 import then fails and, because per-page error
+# isolation swallows it, every page silently degrades to native text only.
+# Force the headless build back on top so cv2 works without X libraries.
+RUN pip install --no-cache-dir -r /app/requirements.txt  && pip uninstall -y opencv-python  && pip install --no-cache-dir --force-reinstall opencv-python-headless==4.11.0.86
 
 COPY run.sh /app/run.sh
 COPY mib /app/mib
