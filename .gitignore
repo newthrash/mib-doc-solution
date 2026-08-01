@@ -24,3 +24,4 @@ cache/
 
 # Derived page exports for inspection - large, regenerable, never committed.
 bad/
+inspect/

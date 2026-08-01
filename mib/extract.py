@@ -75,6 +75,28 @@ _SPONSOR_CORRECTION_RE = re.compile(
 _SPONSOR_PROSE_RE = re.compile(
     r"\bSPONSOR\s+(S[PFR][NRM][-\s]?[0-9OQDILZSBGT]{4})\b", re.IGNORECASE
 )
+# Amendment annotations state a field's value in a sentence, so no per-field
+# label parser ever sees them. They are authoritative rather than corroborating:
+# across the public corpus they match the label on 422 of 422 readable cases,
+# never contradict the sponsor letter's clause, and no packet carries two
+# conflicting values. A match therefore replaces the form field instead of
+# merely filling a blank - worth +54 fields recovered from blanks and, again
+# nearly as much, +50 wrong readings corrected.
+_CORRECTION_RE = {
+    "visa_class": re.compile(
+        r"CORRECTION[^.\n]*?VISA\s+CLASS\s+(?:IS|=|:)?\s*([A-Z0-9-]{3,12})", re.IGNORECASE
+    ),
+    "fee_status": re.compile(
+        r"CORRECTION[^.\n]*?FEE\s+STATUS\s+(?:IS|=|:)?\s*([A-Za-z]{3,10})", re.IGNORECASE
+    ),
+    "applicant_name": re.compile(
+        r"CORRECTION[^.\n]*?APPLICANT\s+(?:IS|=|:)?\s*([^.\n]{3,40})", re.IGNORECASE
+    ),
+}
+# Sponsor letters name the visa class inside a compliance clause.
+_COMPLIANCE_CLASS_RE = re.compile(
+    r"RESPONSIBILITY\s+FOR\s+CLASS\s+([A-Z0-9-]{3,12})\s+COMPLIANCE", re.IGNORECASE
+)
 # The registry extract states an embargo outright. Reading it beats inferring
 # one from a mined world list: on the public corpus EMBARGO REVIEW appears for
 # three different home worlds, and a private set may use others entirely.
@@ -525,6 +547,38 @@ def extract_record(packet: Packet) -> Record:
         if field == "risk_flags":
             record.risk_flags_known = False
     record.documented_damage = bool(_damaged_fields(full_text))
+
+    # Prose evidence is applied after the damage blanking, and outranks it.
+    # The two co-occur precisely because a correction is the remedy for the
+    # destroyed field it names, so honouring the tag over the correction would
+    # discard the fix: on the six packets where both cover the same field the
+    # prose matches the label every time. This does not weaken the no-invented
+    # -data rule - the value is written in the packet, not inferred from it -
+    # and `documented_damage` above still records that the damage occurred.
+    #
+    # Read from the native text layer only, the source the 422-case agreement
+    # was measured on. OCR of these same sentences is excluded: a garbled
+    # clause still matches the pattern, and letting it overwrite a good form
+    # reading would trade a measured gain for an unmeasured risk. Values still
+    # pass their vocabulary snapper, so a malformed capture is dropped.
+    annotated = "\n".join(page.visible_native for page in packet.pages)
+    if match := _COMPLIANCE_CLASS_RE.search(annotated):
+        if snapped := snap_visa(match.group(1)):
+            record.visa_class = snapped
+    # A correction is an amendment, so it is applied last and wins outright.
+    if match := _CORRECTION_RE["visa_class"].search(annotated):
+        if snapped := snap_visa(match.group(1)):
+            record.visa_class = snapped
+    if match := _CORRECTION_RE["fee_status"].search(annotated):
+        if snapped := _parse_fee(match.group(1)):
+            record.fee_status = snapped
+            record.fee_explicit_unknown = snapped == "unknown"
+    if match := _CORRECTION_RE["applicant_name"].search(annotated):
+        if snapped := _parse_name(match.group(1)):
+            record.applicant_name = snapped
+    if match := _SPONSOR_CORRECTION_RE.search(annotated):
+        if snapped := repair_sponsor_id(match.group(1)):
+            record.sponsor_id = snapped
 
     record.stamp_verdict = packet.stamp_verdict
     record.stamp_contested = packet.stamp_contested
