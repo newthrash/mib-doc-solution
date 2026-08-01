@@ -308,9 +308,31 @@ _PAGE_RANK = {
     "unknown": 0,
 }
 
+# Identity is the one field where the intake form is not the best source. It
+# is self-reported, and it is where this corpus puts its identity decoys: on
+# the packets where page kinds disagree about the applicant, intake matches
+# the label 37% of the time against 86% for the biometric slip and 81% for the
+# registry extract. Ranking the identity documents above it is worth +10
+# names against 1 lost over 400 packets.
+#
+# Only the tie-break order changes. Corroboration stays primary: reordering
+# authority *and* promoting it above agreement scores +11/-6, and doing that
+# with the general ranking is the change that once cost 61 names (+0/-16 when
+# re-measured here).
+_IDENTITY_RANK = {
+    "manual": 6,
+    "biometric": 5,
+    "registry": 4,
+    "sponsor": 3,
+    "intake": 2,
+    "fee": 2,
+    "unknown": 0,
+}
+
 
 def _consensus(
-    candidates: list[tuple[str, str]], parser, *, authority_first: bool = False
+    candidates: list[tuple[str, str]], parser, *, authority_first: bool = False,
+    rank: dict[str, int] | None = None,
 ) -> str | None:
     """Resolve a field from candidates carrying their source page type.
 
@@ -324,11 +346,12 @@ def _consensus(
     the point - a later signed note supersedes an earlier form outright rather
     than being outvoted by repetition of the stale value.
     """
+    ranking = rank or _PAGE_RANK
     parsed: list[tuple[int, str]] = []
     for value, kind in candidates:
         result = parser(value)
         if result:
-            parsed.append((_PAGE_RANK.get(kind, 0), result))
+            parsed.append((ranking.get(kind, 0), result))
     if not parsed:
         return None
 
@@ -460,7 +483,9 @@ def extract_record(packet: Packet) -> Record:
                 if decoded:
                     raw[decoded[0]].append((decoded[1], page.kind))
 
-    record.applicant_name = _consensus(raw["applicant_name"], _parse_name) or UNKNOWN
+    record.applicant_name = (
+        _consensus(raw["applicant_name"], _parse_name, rank=_IDENTITY_RANK) or UNKNOWN
+    )
     record.species_code = _consensus(raw["species_code"], snap_species) or UNKNOWN
     record.home_world = _consensus(raw["home_world"], snap_home_world) or UNKNOWN
     record.visa_class = _consensus(raw["visa_class"], snap_visa) or UNKNOWN

@@ -28,7 +28,7 @@
     "ocr_confidence",
     "waiver_seen"
   ],
-  "fitted_from": "train_prose.jsonl",
+  "fitted_from": "train_sel.jsonl",
   "mu": [
     0.42424242424242425,
     0.12396694214876033,

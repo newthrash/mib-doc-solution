@@ -13,11 +13,11 @@
     "DENIED": 0.2,
     "NEEDS_REVIEW": 0.6
   },
-  "fitted_from": "train_prose.jsonl",
+  "fitted_from": "train_sel.jsonl",
   "fitted_on": "extracted_records",
   "folds": 5,
   "min_path_support": 8,
-  "oof_total_estimate": 120.13924827446995,
+  "oof_total_estimate": 120.27258160780329,
   "paths": {
     "adjudicator_conflict": {
       "APPROVED": 0.16666666666666666,
