@@ -22,6 +22,7 @@ import numpy as np
 
 import pymupdf
 
+from . import deshred2
 from .marks import read_marks
 
 # Instruction-shaped decoys are removed from all text views; their presence is
@@ -347,6 +348,23 @@ def ocr_page(page: pymupdf.Page, dpi: int = 220) -> tuple[str, float, list, int]
                 best, best_boxes, best_dpi = candidate, list(_LAST_BOXES), 300
             if _anchor_count(best[0]) >= 2:
                 break
+
+    # Strip realignment: part of this corpus really was cut into horizontal
+    # bands and slid sideways (see mib/deshred2.py for the proof and for why
+    # the first attempt wrongly concluded otherwise). Realigning helps only
+    # pages OCR already fails on and destroys pages it reads fine - 204 body
+    # characters to 0 on one - so it is gated behind the same anchor test as
+    # the rungs above and accepted only if it scores better.
+    if os.environ.get("MIB_DESHRED", "1") not in ("", "0", "false"):
+        if _anchor_count(best[0]) < 2:
+            try:
+                realigned, moved = deshred2.deshred_page(page.parent, page)
+                if moved:
+                    candidate = _tesseract(realigned, psm=3)
+                    if _score(*candidate) > _score(*best):
+                        best, best_boxes = candidate, list(_LAST_BOXES)
+            except Exception:  # a failed realignment must never lose the page
+                pass
 
     # Second engine: Tesseract segments characters before classifying, and the
     # corpus's low-DPI rasters merge adjacent glyphs into blobs that defeat

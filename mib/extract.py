@@ -58,8 +58,16 @@ _ALL_LABELS = {name for names in _LABELS.values() for name in names} | {
     "BIOMETRIC CONFIDENCE", "PRIMARY INTAKE RECORD",
 }
 
+# The verdict may precede its label. OCR of a damaged manual note returns the
+# words of each line in reverse order - "DENIED Finding:" for "Finding:
+# DENIED", "Adjudicator Manual Note" for "Manual Adjudicator Note" - and the
+# label-first form alone missed the note on MIB-000519 entirely, approving a
+# packet whose own adjudicator had written DENIED on it. Both orders are
+# accepted; the caller takes whichever group matched.
+_VERDICT = r"APPROVED|DENIED|NEEDS[\s_]*REVIEW"
 _FINDING_RE = re.compile(
-    r"FINDING\s*[:\-]?\s*(APPROVED|DENIED|NEEDS[\s_]*REVIEW)", re.IGNORECASE
+    rf"FINDING\s*[:\-]?\s*({_VERDICT})|({_VERDICT})\s*[:\-]?\s*FINDING",
+    re.IGNORECASE,
 )
 _RECEIPT_RE = re.compile(
     r"(?:RECEIVED|RECEIPT\s+DATE|PACKET\s+RECEIVED)\s*[:\-]?\s*([0-9]{4}-[0-9]{2}-[0-9]{2})",
@@ -438,7 +446,7 @@ def extract_record(packet: Packet) -> Record:
     full_text = packet.full_text()
 
     # Manual adjudicator finding: highest-precedence visible evidence.
-    findings = _FINDING_RE.findall(full_text)
+    findings = [m.group(1) or m.group(2) for m in _FINDING_RE.finditer(full_text)]
     if findings:
         final = findings[-1].upper().replace(" ", "_").replace("__", "_")
         record.manual_finding = "NEEDS_REVIEW" if "REVIEW" in final else final

@@ -170,8 +170,10 @@ def decision_path(record: Record) -> str:
         record.fee_status == "waived"
         and visa_known
         and record.visa_class != "DIP-1"
-        and not record.has_hardship_waiver
     ):
+        # A DIP-WAIVER is a diplomatic waiver; on a non-DIP-1 visa it is not
+        # the "visible hardship waiver" the field manual requires. Every
+        # credited waiver on a non-DIP-1 visa in train is a DIP-WAIVER.
         return "fee_waived_unjustified"
 
     if record.fee_explicit_unknown:
